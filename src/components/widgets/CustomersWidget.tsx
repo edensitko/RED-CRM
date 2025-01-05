@@ -101,8 +101,8 @@ const CustomersWidget: React.FC<CustomersWidgetProps> = ({ preview = false, data
               }
             />
             <Chip 
-              label={customer.status === 'active' ? 'פעיל' : 'חדש'}
-              color={customer.status === 'active' ? 'success' : 'info'}
+              label={customer.status === 'פעיל' ? 'פעיל' : 'חדש'}
+              color={customer.status === 'פעיל' ? 'success' : 'info'}
               size="small"
               sx={{ ml: 1 }}
             />

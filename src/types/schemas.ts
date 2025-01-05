@@ -98,7 +98,7 @@ export interface Customer extends BaseEntity {
     zipCode: string;
     country: string;
   };
-  status: 'active' | 'inactive';
+  status: 'פעיל' | 'לא פעיל';
   source: string;
   notes: string;
   tags: string[];
@@ -116,7 +116,7 @@ export interface Customer extends BaseEntity {
     endDate: Date;
     type: string;
     value: number;
-    status: 'active' | 'expired' | 'terminated';
+    status: 'פעיל' | 'נגמר' | 'הושבת';
   }>;
   socialMedia?: {
     linkedin?: string;

@@ -2,27 +2,38 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
-  Avatar,
-  IconButton,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
   TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  Paper,
   InputAdornment,
   Chip,
-  Divider,
   Skeleton,
   Snackbar,
   Alert,
   Stack,
+  IconButton,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Grid,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  ListItemSecondaryAction,
+  Avatar,
+  Divider,
   ThemeProvider,
   createTheme,
   CssBaseline,
@@ -32,15 +43,26 @@ import {
   Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  FilterList as FilterListIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
   Person as PersonIcon,
   NoteAdd as NoteAddIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { customerService } from '../services/firebase/customerService';
+import { customerService } from '../services/firebase/customerService'; 
 import { Customer } from '../types/schemas';
 import { useAuth } from '../contexts/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
-import { he } from 'date-fns/locale';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs 
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
+
+const CUSTOMERS_COLLECTION = 'customers'; 
 
 // LTR Theme with Red Palette
 const ltrTheme = createTheme({
@@ -125,103 +147,14 @@ const ltrTheme = createTheme({
   },
 });
 
-const CustomerListItem: React.FC<{
-  customer: Customer;
-  onEdit: () => void;
-  onDelete: () => void;
-  onView: () => void;
-}> = ({ customer, onEdit, onDelete, onView }) => {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'success';
-      case 'inactive': return 'error';
-      default: return 'default';
-    }
-  };
-
-  return (
-    <ListItem
-      component={motion.div}
-      initial={{ opacity: 0, x: -50 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3 }}
-      secondaryAction={
-        <Stack direction="row" spacing={1}>
-          <IconButton edge="end" onClick={onEdit} color="primary">
-            <EditIcon />
-          </IconButton>
-          <IconButton edge="end" onClick={onDelete} color="error">
-            <DeleteIcon />
-          </IconButton>
-        </Stack>
-      }
-      onClick={onView}
-      sx={{ 
-        bgcolor: 'background.paper', 
-        borderRadius: 2, 
-        mb: 1,
-        transition: 'background-color 0.3s, transform 0.2s',
-        '&:hover': {
-          transform: 'scale(1.02)',
-        }
-      }}
-    >
-      <ListItemAvatar>
-        <Avatar sx={{ 
-          bgcolor: 'primary.main', 
-          color: 'primary.contrastText',
-          width: 48,
-          height: 48,
-        }}>
-          {customer.firstName[0]}{customer.lastName[0]}
-        </Avatar>
-      </ListItemAvatar>
-      <ListItemText
-        primary={
-          <Box display="flex" alignItems="center" gap={1}>
-            <Typography variant="body1" color="text.primary">
-              {customer.firstName} {customer.lastName}
-            </Typography>
-            <Chip 
-              label={customer.status === 'active' ? 'פעיל' : 'לא פעיל'}
-              color={getStatusColor(customer.status)}
-              size="small"
-              variant="outlined"
-            />
-          </Box>
-        }
-        secondary={
-          <>
-            {customer.companyName && 
-              <Typography 
-                variant="body2" 
-                color="text.secondary" 
-                component="span" 
-                sx={{ display: 'block' }}
-              >
-                {customer.companyName}
-              </Typography>
-            }
-            <Typography 
-              variant="body2" 
-              color="text.secondary" 
-              component="span" 
-              sx={{ display: 'block' }}
-            >
-              {customer.email} | {customer.phone}
-            </Typography>
-          </>
-        }
-      />
-    </ListItem>
-  );
-};
-
 const Customers: React.FC = () => {
   const { currentUser } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortColumn, setSortColumn] = useState<keyof Customer | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [filterStatus, setFilterStatus] = useState('');
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -241,7 +174,7 @@ const Customers: React.FC = () => {
     email: '',
     phone: '',
     companyName: '',
-    status: 'active',
+    status: 'פעיל',
     value: 0,
   });
   const [notes, setNotes] = useState<string>('');
@@ -252,26 +185,84 @@ const Customers: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    const filtered = customers.filter(customer => 
-      customer.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    let filtered = [...customers];
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter((customer) =>
+        Object.values(customer).some((value) =>
+          value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+    }
+
+    // Status filter
+    if (filterStatus) {
+      filtered = filtered.filter((customer) => customer.status === filterStatus);
+    }
+
+    // Sorting
+    if (sortColumn) {
+      filtered.sort((a, b) => {
+        const valueA = a[sortColumn];
+        const valueB = b[sortColumn];
+        
+        if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+        if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     setFilteredCustomers(filtered);
-  }, [searchTerm, customers]);
+  }, [customers, searchTerm, filterStatus, sortColumn, sortDirection]);
+
+  const handleSort = (column: keyof Customer) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') => {
     setSnackbar({ open: true, message, severity });
   };
 
   const fetchCustomers = async () => {
-    if (!currentUser) return;
-
     try {
       setLoading(true);
-      const activeCustomers = await customerService.getActiveCustomers();
-      setCustomers(activeCustomers);
+      if (!currentUser) return;
+
+      // Fetch all non-deleted customers
+      const baseQuery = query(
+        collection(db, CUSTOMERS_COLLECTION),
+        where('isDeleted', '==', false)
+      );
+      
+      const querySnapshot = await getDocs(baseQuery);
+      const fetchedCustomers = querySnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+            lastContact: data.lastContact?.toDate() || null,
+            contracts: data.contracts?.map((contract: any) => ({
+              ...contract,
+              startDate: contract.startDate?.toDate() || new Date(),
+              endDate: contract.endDate?.toDate() || new Date(),
+            })) || [],
+            status: data.status || 'פעיל',
+            isDeleted: data.isDeleted || false,
+          } as Customer;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort in descending order after fetching
+
+      setCustomers(fetchedCustomers);
+      setFilteredCustomers(fetchedCustomers);
     } catch (error) {
       console.error('Error fetching customers:', error);
       showSnackbar('שגיאה בטעינת הלקוחות', 'error');
@@ -294,7 +285,7 @@ const Customers: React.FC = () => {
         updatedAt: new Date(),
         lastContact: new Date(),
         contracts: [],
-        status: 'active',
+        status: 'פעיל',
         isDeleted: false,
       } as Customer;
 
@@ -337,7 +328,7 @@ const Customers: React.FC = () => {
       email: '',
       phone: '',
       companyName: '',
-      status: 'active',
+      status: 'פעיל', 
       value: 0,
     });
     setOpenEditDialog(true);
@@ -410,11 +401,13 @@ const Customers: React.FC = () => {
           }}
         >
           <TextField
-            fullWidth
+         fullWidth
             variant="outlined"
-            placeholder="חפש לקוחות..."
+            label="חיפוש לקוחות"
+            placeholder="חיפוש "
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -433,9 +426,8 @@ const Customers: React.FC = () => {
               }
             }}
           />
-          <Button 
+          <Button  
             variant="contained" 
-            color="primary" 
             startIcon={<AddIcon />} 
             onClick={() => handleOpenEditDialog()}
             sx={{ 
@@ -447,41 +439,106 @@ const Customers: React.FC = () => {
           >
             לקוח חדש
           </Button>
+          <FormControl sx={{ ml: 2, minWidth: 150 }}>
+            <InputLabel id="filter-status-label">הכל</InputLabel>
+            <Select
+              labelId="filter-status-label"
+              id="filter-status"
+              value={filterStatus}
+              label="סטטוס"
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <MenuItem value="">הכל </MenuItem>
+              <MenuItem value="פעיל">פעיל</MenuItem>
+              <MenuItem value="לא פעיל">לא פעיל</MenuItem>
+            </Select>
+          </FormControl>
         </Paper>
 
         {loading ? (
-          <List>
-            {[...Array(6)].map((_, index) => (
-              <ListItem key={index}>
-                <ListItemAvatar>
-                  <Skeleton variant="circular" width={40} height={40} />
-                </ListItemAvatar>
-                <ListItemText
-                  primary={<Skeleton variant="text" width="60%" />}
-                  secondary={<Skeleton variant="text" width="40%" />}
-                />
-              </ListItem>
-            ))}
-          </List>
+          <TableContainer component={Paper}>
+            <Table sx={{ minWidth: 650 }} aria-label="customers table">
+              <TableHead>
+                <TableRow>
+                  {['שם', 'חברה', 'אימייל', 'טלפון', 'סטטוס', 'תאריך יצירה', 'פעולות'].map((header) => (
+                    <TableCell key={header}>{header}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {[...Array(6)].map((_, index) => (
+                  <TableRow key={index}>
+                    {[...Array(7)].map((_, cellIndex) => (
+                      <TableCell key={cellIndex}>
+                        <Skeleton variant="text" width="80%" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         ) : (
-          <List 
-            component={motion.ul}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ staggerChildren: 0.1 }}
-          >
-            {filteredCustomers.map((customer, index) => (
-              <React.Fragment key={`${customer.id}-${index}`}>
-                <CustomerListItem
-                  customer={customer}
-                  onEdit={() => handleEditCustomer(customer)}
-                  onDelete={() => handleDelete(customer.id)}
-                  onView={() => handleOpenViewDialog(customer)}
-                />
-                {index < filteredCustomers.length - 1 && <Divider variant="inset" component="li" />}
-              </React.Fragment>
-            ))}
-          </List>
+          <TableContainer component={Paper}>
+            <Table sx={{ minWidth: 650 }} aria-label="customers table">
+              <TableHead>
+                <TableRow>
+                  {(['firstName', 'companyName', 'email', 'phone', 'status', 'createdAt'] as (keyof Customer)[]).map((column) => (
+                    <TableCell key={column}>
+                      <Box 
+                        sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          cursor: 'pointer' 
+                        }} 
+                        onClick={() => handleSort(column)}
+                      >
+                        {column === 'firstName' && 'שם'}
+                        {column === 'companyName' && 'חברה'}
+                        {column === 'email' && 'אימייל'}
+                        {column === 'phone' && 'טלפון'}
+                        {column === 'status' && 'סטטוס'}
+                        {column === 'createdAt' && 'תאריך יצירה'}
+                        {sortColumn === column && (
+                          sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                        )}
+                      </Box>
+                    </TableCell>
+                  ))}
+                  <TableCell>פעולות</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredCustomers.map((customer) => (
+                  <TableRow key={customer.id} hover>
+                    <TableCell>{customer.firstName} {customer.lastName}</TableCell>
+                    <TableCell>{customer.companyName}</TableCell>
+                    <TableCell>{customer.email}</TableCell>
+                    <TableCell>{customer.phone}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={customer.status}
+                        color={customer.status === 'פעיל' ? 'success' : 'default'}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{customer.createdAt.toLocaleDateString('he-IL')}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1}>
+                        <IconButton onClick={() => handleOpenEditDialog(customer)} color="primary">
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDelete(customer.id)} color="error">
+                          <DeleteIcon />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
 
         <Dialog 
@@ -666,8 +723,8 @@ const Customers: React.FC = () => {
                   {selectedCustomer.phone}
                 </Typography>
                 <Chip 
-                  label={selectedCustomer.status === 'active' ? 'פעיל' : 'לא פעיל'}
-                  color={selectedCustomer.status === 'active' ? 'success' : 'error'}
+                  label={selectedCustomer.status === 'פעיל' ? 'פעיל' : 'לא פעיל'}
+                  color={selectedCustomer.status === 'פעיל' ? 'success' : 'error'}
                   size="medium"
                   variant="outlined"
                   sx={{ mt: 2, mb: 2 }}

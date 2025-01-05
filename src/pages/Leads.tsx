@@ -26,6 +26,7 @@ import {
   ThemeProvider,
   createTheme,
   CssBaseline,
+  SelectChangeEvent,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -223,7 +224,7 @@ const Leads: React.FC = () => {
 
     try {
       await updateDoc(doc(db, `users/${currentUser.uid}/leads/${selectedLead.id}`), { notes: formData.notes });
-      showSnackbar('הערה נשמרה בהצלחה');
+      showSnackbar('הערה נשמרה בהצלחה' , 'success');
     } catch (error) {
       console.error('Error saving note:', error);
       showSnackbar('שגיאה בשמירת ההערה', 'error');

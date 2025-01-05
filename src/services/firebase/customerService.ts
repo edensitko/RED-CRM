@@ -32,7 +32,7 @@ const convertCustomerFromFirestore = (doc: DocumentData): Customer => {
       startDate: contract.startDate?.toDate() || new Date(),
       endDate: contract.endDate?.toDate() || new Date(),
     })) || [],
-    status: data.status || 'active',
+    status: data.status || 'פעיל',
     isDeleted: data.isDeleted || false,
   };
 };
@@ -51,7 +51,7 @@ export const customerService = {
         endDate: Timestamp.fromDate(contract.endDate),
       })),
       isDeleted: false,
-      status: 'active',
+      status: 'פעיל',
     });
 
     await activityService.logActivity({
@@ -97,7 +97,7 @@ export const customerService = {
   async getActiveCustomers(maxResults?: number): Promise<Customer[]> {
     const baseQuery = query(
       collection(db, CUSTOMERS_COLLECTION),
-      where('status', '==', 'active'),
+      where('status', '==', 'פעיל'),
       where('isDeleted', '==', false),
       orderBy('createdAt', 'desc')
     );
@@ -124,7 +124,7 @@ export const customerService = {
     // Soft delete
     await updateDoc(customerRef, {
       isDeleted: true,
-      status: 'inactive',
+      status: 'לא פעיל',
       updatedAt: Timestamp.fromDate(new Date()),
       updatedBy: deletedBy,
     });
