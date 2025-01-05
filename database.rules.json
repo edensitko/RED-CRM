@@ -1,0 +1,54 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "leads": {
+          ".indexOn": ["created"],
+          "$leadId": {
+            ".validate": "newData.hasChildren(['name', 'email', 'phone', 'status'])",
+            "name": { ".validate": "newData.isString() && newData.val().length > 0" },
+            "company": { ".validate": "newData.isString() || newData.val() === null" },
+            "email": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/)" },
+            "phone": { ".validate": "newData.isString() && newData.val().length > 0" },
+            "source": { ".validate": "newData.isString() && newData.val().length > 0" },
+            "status": { ".validate": "newData.isString() && (newData.val() === 'חדש' || newData.val() === 'בתהליך' || newData.val() === 'הושלם' || newData.val() === 'לא רלוונטי')" },
+            "created": { ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}$/)" },
+            "lastContact": { ".validate": "newData.isString() && newData.val().matches(/^\\d{4}-\\d{2}-\\d{2}$/)" },
+            "value": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "notes": { ".validate": "newData.isString() || newData.val() === null" }
+          }
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/)"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "role": {
+          ".validate": "newData.isString() && (newData.val() === 'user' || newData.val() === 'admin')"
+        },
+        "photoURL": {
+          ".validate": "newData.isString() || newData.val() === null"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "lastLogin": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

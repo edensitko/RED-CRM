@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M20 8h16c6.627 0 12 5.373 12 12s-5.373 12-12 12H20V8z" fill="#FF4444"/>
+  <path d="M8 8h12v24H8c-6.627 0-12-5.373-12-12S1.373 8 8 8z" fill="#FF6B6B"/>
+  <text x="50" y="27" font-family="Arial" font-weight="bold" font-size="24" fill="#333333">RED</text>
+</svg>
