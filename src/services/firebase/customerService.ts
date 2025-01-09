@@ -69,6 +69,8 @@ export const customerService = {
         company: customer.companyName,
         status: customer.status,
       },
+      completedAt: undefined,
+      dueDate: undefined
     });
   },
 
@@ -87,18 +89,12 @@ export const customerService = {
     await updateDoc(customerRef, updateData);
   },
 
-  async getCustomer(id: string): Promise<Customer | null> {
-    const customerRef = doc(db, CUSTOMERS_COLLECTION, id);
-    const customerDoc = await getDoc(customerRef);
-    if (!customerDoc.exists()) return null;
-    return convertCustomerFromFirestore(customerDoc);
-  },
-
-  async getActiveCustomers(maxResults?: number): Promise<Customer[]> {
+  async getActiveCustomers(userId: string, maxResults?: number): Promise<Customer[]> {
     const baseQuery = query(
       collection(db, CUSTOMERS_COLLECTION),
       where('status', '==', 'פעיל'),
       where('isDeleted', '==', false),
+      where('userId', '==', userId),
       orderBy('createdAt', 'desc')
     );
     
@@ -106,16 +102,56 @@ export const customerService = {
     return querySnapshot.docs.map(convertCustomerFromFirestore);
   },
 
-  async getCustomersByStatus(status: Customer['status']): Promise<Customer[]> {
-    const baseQuery = query(
+  async getAllCustomers(userId: string): Promise<Customer[]> {
+    console.log('Getting all customers for userId:', userId);
+    try {
+      // First try without orderBy to see if we get results
+      const baseQuery = query(
+        collection(db, CUSTOMERS_COLLECTION),
+        where('userId', '==', userId),
+        where('isDeleted', '==', false)
+      );
+      
+      console.log('Executing Firestore query...');
+      const querySnapshot = await getDocs(baseQuery);
+      console.log('Raw query results:', querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      const customers = querySnapshot.docs.map(convertCustomerFromFirestore);
+      console.log('Processed customers:', customers);
+      
+      // Sort in memory if we get results
+      return customers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    } catch (error) {
+      console.error('Error in getAllCustomers:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      throw error;
+    }
+  },
+
+  async getCustomersByStatus(userId: string, status: Customer['status']): Promise<Customer[]> {
+    const customersQuery = query(
       collection(db, CUSTOMERS_COLLECTION),
       where('status', '==', status),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId),
+      where('isDeleted', '==', false)
     );
-    
-    const querySnapshot = await getDocs(baseQuery);
+
+    const querySnapshot = await getDocs(customersQuery);
     return querySnapshot.docs.map(convertCustomerFromFirestore);
+  },
+
+  async getCustomer(userId: string, id: string): Promise<Customer | null> {
+    const customerDoc = await getDoc(doc(db, CUSTOMERS_COLLECTION, id));
+    
+    if (!customerDoc.exists()) return null;
+    
+    const customerData = customerDoc.data();
+    if (customerData.userId !== userId) return null;
+    
+    return convertCustomerFromFirestore(customerDoc);
   },
 
   async deleteCustomer(id: string, deletedBy: string): Promise<void> {
@@ -143,6 +179,8 @@ export const customerService = {
       metadata: {
         customerId: id,
       },
+      completedAt: undefined,
+      dueDate: undefined
     });
   },
 };

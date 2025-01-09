@@ -17,7 +17,7 @@ import { Outlet } from 'react-router-dom';
 import NavigationSidebar from '../components/NavigationSidebar';
 import Sidebar from '../components/Sidebar';
 import { NotesProvider } from '../contexts/NotesContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import LogoImage from '../assets/logo.jpg';
 
 const Logo = styled('img')(({ theme }) => ({
@@ -60,9 +60,9 @@ const ContentContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(3),
 }));
 
-const MainLayout: React.FC = () => {
+const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const theme = useTheme();
-  const { currentUser, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -73,9 +73,13 @@ const MainLayout: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    logout();
-    handleUserMenuClose();
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      handleUserMenuClose();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   const handleSettings = () => {
@@ -115,12 +119,12 @@ const MainLayout: React.FC = () => {
             
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography sx={{ mr: 2 }}>
-                {currentUser?.displayName || 'User'}
+                {user?.displayName || 'User'}
               </Typography>
               <IconButton onClick={handleUserMenuOpen}>
                 <Avatar
-                  src={currentUser?.photoURL || undefined}
-                  alt={currentUser?.displayName || undefined}
+                  src={user?.photoURL || undefined}
+                  alt={user?.displayName || undefined}
                   sx={{ 
                     width: 32, 
                     height: 32, 
@@ -156,7 +160,7 @@ const MainLayout: React.FC = () => {
 
           {/* Central Content Area (76%) */}
           <ContentContainer>
-            <Outlet />
+            {children}
           </ContentContainer>
 
           {/* Left Notes Sidebar (12%) */}

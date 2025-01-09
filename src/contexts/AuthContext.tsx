@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import firebase from '../services/firebase';
 import { db } from '../config/firebase';
 
@@ -70,7 +70,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, name: string) => {
     try {
-      await firebase.signUp(email, password, name);
+      const result = await firebase.signUp(email, password, name);
+      
+      // Create user document in users collection
+      await setDoc(doc(db, 'users', result.user.uid), {
+        uid: result.user.uid,
+        email: email,
+        name: name,
+        role: 'user',
+        createdAt: serverTimestamp(),
+        lastLogin: serverTimestamp()
+      });
+
       navigate('/');
     } catch (error) {
       console.error('Error signing up:', error);

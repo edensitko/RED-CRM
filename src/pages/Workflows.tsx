@@ -6,15 +6,15 @@ const Workflows: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100" dir="rtl">
       <div className="text-center p-10 bg-white rounded-xl shadow-2xl max-w-md w-full">
         <div className="flex justify-center mb-6">
-          <FaTools className="text-6xl text-yellow-500 animate-bounce" />
+          <FaTools className="text-6xl text-red-500 animate-bounce" />
         </div>
         <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          עמוד בתחזוקה
+          עמוד בשיפוצים
         </h1>
         <p className="text-gray-600 mb-6">
-          הדף נמצא כרגע בתהליך של שדרוג ותחזוקה. אנא חזור מאוחר יותר.
+          הדף נמצא כרגע בתהליך של שדרוג ושיפוץ. אנא חזור מאוחר יותר.
         </p>
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded">
+        <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded">
           <p className="text-yellow-700">
             <strong>הודעה:</strong> אנו עובדים על שיפור חווית המשתמש. תודה על הסבלנות.
           </p>

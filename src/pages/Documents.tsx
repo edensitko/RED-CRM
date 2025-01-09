@@ -23,6 +23,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import { FaTools } from 'react-icons/fa';
 
 interface Document {
   id: string;
@@ -89,160 +90,180 @@ const mockDocuments: Document[] = [
 ];
 
 const Documents: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // const [searchTerm, setSearchTerm] = useState('');
+  // const [typeFilter, setTypeFilter] = useState('all');
+  // const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const allTags = Array.from(
-    new Set(mockDocuments.flatMap((doc) => doc.tags))
-  ).sort();
+  // const allTags = Array.from(
+  //   new Set(mockDocuments.flatMap((doc) => doc.tags))
+  // ).sort();
 
-  const filteredDocuments = mockDocuments.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = typeFilter === 'all' || doc.type === typeFilter;
-    const matchesTags =
-      selectedTags.length === 0 ||
-      selectedTags.every((tag) => doc.tags.includes(tag));
-    return matchesSearch && matchesType && matchesTags;
-  });
+  // const filteredDocuments = mockDocuments.filter((doc) => {
+  //   const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase());
+  //   const matchesType = typeFilter === 'all' || doc.type === typeFilter;
+  //   const matchesTags =
+  //     selectedTags.length === 0 ||
+  //     selectedTags.every((tag) => doc.tags.includes(tag));
+  //   return matchesSearch && matchesType && matchesTags;
+  // });
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'pdf':
-        return '📄';
-      case 'docx':
-        return '📝';
-      case 'xlsx':
-        return '📊';
-      case 'pptx':
-        return '📑';
-      default:
-        return '📄';
-    }
-  };
+  // const getFileIcon = (type: string) => {
+  //   switch (type) {
+  //     case 'pdf':
+  //       return '📄';
+  //     case 'docx':
+  //       return '📝';
+  //     case 'xlsx':
+  //       return '📊';
+  //     case 'pptx':
+  //       return '📑';
+  //     default:
+  //       return '📄';
+  //   }
+  // };
 
+  // return (
+  //   <Box sx={{ p: 3 }}>
+  //     <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  //       <Typography variant="h4">מסמכים</Typography>
+  //       <Button
+  //         variant="contained"
+  //         color="primary"
+  //         startIcon={<CloudUploadIcon />}
+  //       >
+  //         העלאת מסמך
+  //       </Button>
+  //     </Box>
+
+  //     <Grid container spacing={2} sx={{ mb: 3 }}>
+  //       <Grid item xs={12} sm={6} md={4}>
+  //         <TextField
+  //           fullWidth
+  //           label="חיפוש מסמכים"
+  //           value={searchTerm}
+  //           onChange={(e) => setSearchTerm(e.target.value)}
+  //         />
+  //       </Grid>
+  //       <Grid item xs={12} sm={6} md={4}>
+  //         <TextField
+  //           fullWidth
+  //           select
+  //           label="סוג קובץ"
+  //           value={typeFilter}
+  //           onChange={(e) => setTypeFilter(e.target.value)}
+  //         >
+  //           <MenuItem value="all">הכל</MenuItem>
+  //           <MenuItem value="pdf">PDF</MenuItem>
+  //           <MenuItem value="docx">Word</MenuItem>
+  //           <MenuItem value="xlsx">Excel</MenuItem>
+  //           <MenuItem value="pptx">PowerPoint</MenuItem>
+  //         </TextField>
+  //       </Grid>
+  //     </Grid>
+
+  //     <Box sx={{ mb: 3 }}>
+  //       <Typography variant="subtitle1" gutterBottom>
+  //         תגיות:
+  //       </Typography>
+  //       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+  //         {allTags.map((tag) => (
+  //           <Chip
+  //             key={tag}
+  //             label={tag}
+  //             onClick={() => {
+  //               if (selectedTags.includes(tag)) {
+  //                 setSelectedTags(selectedTags.filter((t) => t !== tag));
+  //               } else {
+  //                 setSelectedTags([...selectedTags, tag]);
+  //               }
+  //             }}
+  //             color={selectedTags.includes(tag) ? 'primary' : 'default'}
+  //           />
+  //         ))}
+  //       </Box>
+  //     </Box>
+
+  //     <Card>
+  //       <TableContainer>
+  //         <Table>
+  //           <TableHead>
+  //             <TableRow>
+  //               <TableCell>שם המסמך</TableCell>
+  //               <TableCell>גודל</TableCell>
+  //               <TableCell>תאריך עדכון</TableCell>
+  //               <TableCell>בעלים</TableCell>
+  //               <TableCell>שיתוף</TableCell>
+  //               <TableCell>תגיות</TableCell>
+  //               <TableCell>פעולות</TableCell>
+  //             </TableRow>
+  //           </TableHead>
+  //           <TableBody>
+  //             {filteredDocuments.map((doc) => (
+  //               <TableRow key={doc.id}>
+  //                 <TableCell>
+  //                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+  //                     {getFileIcon(doc.type)}
+  //                     {doc.name}
+  //                   </Box>
+  //                 </TableCell>
+  //                 <TableCell>{doc.size}</TableCell>
+  //                 <TableCell>{doc.lastModified}</TableCell>
+  //                 <TableCell>{doc.owner}</TableCell>
+  //                 <TableCell>
+  //                   {doc.shared.length > 0 ? (
+  //                     <Chip
+  //                       label={`${doc.shared.length} משתמשים`}
+  //                       size="small"
+  //                     />
+  //                   ) : (
+  //                     'לא משותף'
+  //                   )}
+  //                 </TableCell>
+  //                 <TableCell>
+  //                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+  //                     {doc.tags.map((tag) => (
+  //                       <Chip key={tag} label={tag} size="small" />
+  //                     ))}
+  //                   </Box>
+  //                 </TableCell>
+  //                 <TableCell>
+  //                   <IconButton size="small" color="primary">
+  //                     <DownloadIcon />
+  //                   </IconButton>
+  //                   <IconButton size="small" color="primary">
+  //                     <ShareIcon />
+  //                   </IconButton>
+  //                   <IconButton size="small" color="error">
+  //                     <DeleteIcon />
+  //                   </IconButton>
+  //                 </TableCell>
+  //               </TableRow>
+  //             ))}
+  //           </TableBody>
+  //         </Table>
+  //       </TableContainer>
+  //     </Card>
+  //   </Box>
+  // );
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4">מסמכים</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<CloudUploadIcon />}
-        >
-          העלאת מסמך
-        </Button>
-      </Box>
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={4}>
-          <TextField
-            fullWidth
-            label="חיפוש מסמכים"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={4}>
-          <TextField
-            fullWidth
-            select
-            label="סוג קובץ"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <MenuItem value="all">הכל</MenuItem>
-            <MenuItem value="pdf">PDF</MenuItem>
-            <MenuItem value="docx">Word</MenuItem>
-            <MenuItem value="xlsx">Excel</MenuItem>
-            <MenuItem value="pptx">PowerPoint</MenuItem>
-          </TextField>
-        </Grid>
-      </Grid>
-
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          תגיות:
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {allTags.map((tag) => (
-            <Chip
-              key={tag}
-              label={tag}
-              onClick={() => {
-                if (selectedTags.includes(tag)) {
-                  setSelectedTags(selectedTags.filter((t) => t !== tag));
-                } else {
-                  setSelectedTags([...selectedTags, tag]);
-                }
-              }}
-              color={selectedTags.includes(tag) ? 'primary' : 'default'}
-            />
-          ))}
-        </Box>
-      </Box>
-
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>שם המסמך</TableCell>
-                <TableCell>גודל</TableCell>
-                <TableCell>תאריך עדכון</TableCell>
-                <TableCell>בעלים</TableCell>
-                <TableCell>שיתוף</TableCell>
-                <TableCell>תגיות</TableCell>
-                <TableCell>פעולות</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredDocuments.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {getFileIcon(doc.type)}
-                      {doc.name}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{doc.size}</TableCell>
-                  <TableCell>{doc.lastModified}</TableCell>
-                  <TableCell>{doc.owner}</TableCell>
-                  <TableCell>
-                    {doc.shared.length > 0 ? (
-                      <Chip
-                        label={`${doc.shared.length} משתמשים`}
-                        size="small"
-                      />
-                    ) : (
-                      'לא משותף'
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {doc.tags.map((tag) => (
-                        <Chip key={tag} label={tag} size="small" />
-                      ))}
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <IconButton size="small" color="primary">
-                      <DownloadIcon />
-                    </IconButton>
-                    <IconButton size="small" color="primary">
-                      <ShareIcon />
-                    </IconButton>
-                    <IconButton size="small" color="error">
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-    </Box>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100" dir="rtl">
+      <div className="text-center p-10 bg-white rounded-xl shadow-2xl max-w-md w-full">
+        <div className="flex justify-center mb-6">
+          <FaTools className="text-6xl text-red-500 animate-bounce" />
+        </div>
+        <h1 className="text-3xl font-bold text-gray-800 mb-4">
+          עמוד בשיפוצים
+        </h1>
+        <p className="text-gray-600 mb-6">
+          הדף נמצא כרגע בתהליך של שדרוג ושיפוץ. אנא חזור מאוחר יותר.
+        </p>
+        <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded">
+          <p className="text-yellow-700">
+            <strong>הודעה:</strong> אנו עובדים על שיפור חווית המשתמש. תודה על הסבלנות.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

@@ -28,6 +28,8 @@ interface DashboardData {
   sales: SalesData[];
   teamPerformance: TeamMemberPerformance[];
   activities: Activity[];
+  [key: string]: any;
+  
 }
 
 export const useDashboardWidgetData = () => {
@@ -110,10 +112,18 @@ export const useDashboardWidgetData = () => {
       );
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: data.type || 'defaultType',
+          description: data.description || 'No description',
+          timestamp: data.timestamp || Timestamp.now(),
+          userId: data.userId || currentUser.uid,
+          entityId: data.entityId,
+          entityType: data.entityType
+        };
+      });
     } catch (error) {
       console.error('Error fetching activities:', error);
       return [];
@@ -139,6 +149,8 @@ export const useDashboardWidgetData = () => {
           sales: salesData,
           teamPerformance: teamData,
           activities: activitiesData
+        
+
         });
         
         setError(null);

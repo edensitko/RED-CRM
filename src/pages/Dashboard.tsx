@@ -20,7 +20,6 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { useSnackbar } from '../contexts/SnackbarContext';
 import { getDashboardLayout, saveDashboardLayout } from '../services/firebase/dashboardService';
 import WidgetSelector from '../components/widgets/WidgetSelector';
 import { getWidgetDefinition } from '../components/widgets/widgetDefinitions';
@@ -68,7 +67,6 @@ interface LayoutItem {
 
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
-  const { showSnackbar } = useSnackbar();
   const { data: widgetData, refreshData } = useDashboardWidgetData();
   const [layouts, setLayouts] = useState<{ [key: string]: LayoutItem[] }>({});
   const [currentLayout, setCurrentLayout] = useState<LayoutItem[]>([]);
@@ -82,23 +80,22 @@ const Dashboard: React.FC = () => {
         try {
           const savedLayout = await getDashboardLayout(currentUser.uid);
           if (savedLayout && savedLayout.length > 0) {
-            setCurrentLayout(savedLayout);
+            setCurrentLayout(savedLayout.map(item => ({ ...item, settings: item.settings || {} })));
             setLayouts({
-              lg: savedLayout,
-              md: savedLayout.map(item => ({ ...item })),
-              sm: savedLayout.map(item => ({ ...item })),
-              xs: savedLayout.map(item => ({ ...item })),
-              xxs: savedLayout.map(item => ({ ...item })),
+              lg: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+              md: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+              sm: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+              xs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+              xxs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
             });
           }
         } catch (error) {
           console.error('Error loading layout:', error);
-          showSnackbar('Error loading dashboard layout', 'error');
         }
       }
     };
     loadLayout();
-  }, [currentUser, showSnackbar]);
+  }, [currentUser]);
 
   const handleOpenWidgetSelector = (event: React.MouseEvent<HTMLElement>) => {
     setWidgetSelectorAnchor(event.currentTarget);
@@ -111,7 +108,6 @@ const Dashboard: React.FC = () => {
   const handleAddWidget = useCallback((widgetType: string) => {
     const widgetDef = getWidgetDefinition(widgetType);
     if (!widgetDef) {
-      showSnackbar('Invalid widget type', 'error');
       return;
     }
 
@@ -141,8 +137,7 @@ const Dashboard: React.FC = () => {
       xxs: newLayout.map(item => ({ ...item })),
     }));
     saveDashboardLayout(currentUser?.uid || '', newLayout);
-    showSnackbar('Widget added successfully', 'success');
-  }, [currentLayout, currentUser, showSnackbar]);
+  }, [currentLayout, currentUser]);
 
   const handleRemoveWidget = useCallback(async (widgetId: string) => {
     try {
@@ -157,12 +152,10 @@ const Dashboard: React.FC = () => {
         xxs: newLayout.map(item => ({ ...item })),
       }));
       await saveDashboardLayout(currentUser?.uid || '', newLayout);
-      showSnackbar('Widget removed successfully', 'success');
     } catch (error) {
       console.error('Error removing widget:', error);
-      showSnackbar('Failed to remove widget', 'error');
     }
-  }, [currentLayout, currentUser, showSnackbar]);
+  }, [currentLayout, currentUser]);
 
   const handleLayoutChange = useCallback((layout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     if (!isLayoutLocked) {
@@ -184,10 +177,9 @@ const Dashboard: React.FC = () => {
 
       saveDashboardLayout(currentUser?.uid || '', updatedLayout).catch(error => {
         console.error('Error saving layout:', error);
-        showSnackbar('Failed to save layout changes', 'error');
       });
     }
-  }, [isLayoutLocked, currentLayout, currentUser, showSnackbar]);
+  }, [isLayoutLocked, currentLayout, currentUser]);
 
   const renderWidget = useCallback((item: LayoutItem) => {
     const WidgetComponent = widgetComponents[item.widget];

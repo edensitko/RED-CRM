@@ -75,26 +75,13 @@ const signIn = async (email: string, password: string) => {
 
 const signUp = async (email: string, password: string, name: string) => {
   try {
-    const result = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(result.user, { displayName: name });
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
-    // Create user document
-    await setDoc(doc(db, 'users', result.user.uid), {
-      id: result.user.uid,
-      email: result.user.email,
-      name: name,
-      role: 'user',
-      createdAt: serverTimestamp(),
-      lastLogin: serverTimestamp(),
-    });
+    if (userCredential.user) {
+      await updateProfile(userCredential.user, { displayName: name });
+    }
 
-    // Create default dashboard settings
-    await setDoc(doc(db, `users/${result.user.uid}/settings/dashboard`), {
-      layouts: [],
-      isLocked: true
-    });
-
-    return result.user;
+    return userCredential;
   } catch (error) {
     console.error('Error signing up:', error);
     throw error;

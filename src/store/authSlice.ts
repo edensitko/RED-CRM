@@ -1,8 +1,15 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User } from 'firebase/auth';
 
+interface SerializableUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
 interface AuthState {
-  user: User | null;
+  user: SerializableUser | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
@@ -20,8 +27,18 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setUser: (state, action: PayloadAction<User | null>) => {
-      state.user = action.payload;
-      state.isAuthenticated = !!action.payload;
+      if (action.payload) {
+        state.user = {
+          uid: action.payload.uid,
+          email: action.payload.email,
+          displayName: action.payload.displayName,
+          photoURL: action.payload.photoURL,
+        };
+        state.isAuthenticated = true;
+      } else {
+        state.user = null;
+        state.isAuthenticated = false;
+      }
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
@@ -32,6 +49,7 @@ const authSlice = createSlice({
     logout: (state) => {
       state.user = null;
       state.isAuthenticated = false;
+      state.error = null;
     },
   },
 });

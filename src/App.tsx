@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, StyledEngineProvider } from '@mui/material';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { NotesProvider } from './contexts/NotesContext';
 import { theme } from './theme/theme';
@@ -25,16 +25,15 @@ import Forms from './pages/Forms';
 import Documents from './pages/Documents';
 import Reports from './pages/Reports';
 import Payments from './pages/Payments';
-import Sidebar from './components/Sidebar';
 import WideScreenMessage from './pages/WideScreenMessage';
+import NotFound from './pages/NotFound'; // Import the NotFound component
 import { useState, useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
-import { persistStore, persistReducer } from 'redux-persist';
-import storage from 'redux-persist/lib/storage';
-import { createStore, combineReducers } from 'redux';
 import { store, persistor } from './store';
-import { SnackbarProvider } from './contexts/SnackbarContext';
+import { SnackbarProvider } from 'notistack';
+import Ideas from './pages/Ideas';
+import StylesScreen from './styles/globalexample';
 
 // Debug component to log route changes
 const RouteLogger = () => {
@@ -46,7 +45,9 @@ const RouteLogger = () => {
 };
 
 const routes = [
-  { path: '/', element: <Dashboard /> },
+  { path: '/', element: <Navigate to="/dashboard" /> },
+  { path: '/login', element: <Login /> },
+  { path: '/dashboard', element: <Dashboard /> },
   { path: '/customers', element: <Customers /> },
   { path: '/projects', element: <Projects /> },
   { path: '/tasks', element: <Tasks /> },
@@ -55,6 +56,7 @@ const routes = [
   { path: '/sales', element: <Sales /> },
   { path: '/support', element: <Support /> },
   { path: '/workflows', element: <Workflows /> },
+  { path: '/ideas', element: <Ideas /> },
   { path: '/chat', element: <Chat /> },
   { path: '/task-assignment', element: <TaskAssignment /> },
   { path: '/time-reports', element: <TimeReports /> },
@@ -62,24 +64,61 @@ const routes = [
   { path: '/documents', element: <Documents /> },
   { path: '/reports', element: <Reports /> },
   { path: '/payments', element: <Payments /> },
+  { path: '/task-assignments', element: <TaskAssignment /> },
+  { path: '/example', element: <StylesScreen /> },
+  { path: '*', element: <NotFound /> },
 ];
 
-function App() {
-  const [showMigration, setShowMigration] = useState(true);
-  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 1100);
+function LoadingScreen() {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      backgroundColor: 'red',
+    }}>
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        color: 'white',
+        fontSize: '24px',
+      }}>
+        <span>.</span>
+        <span>.</span>
+        <span>.</span>
+      </div>
+    </div>
+  );
+}
 
-  const handleMigrationComplete = () => {
-    setShowMigration(false);
-  };
+function App() {
+  const { currentUser, loading } = useAuth();
+
+  console.log('App component rendered');
+
+  if (loading) {
+    console.log('Loading state active');
+    return <LoadingScreen />;
+  }
+
+  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
     const handleResize = () => {
-      setIsWideScreen(window.innerWidth >= 1100);
+      setIsWideScreen(window.innerWidth >= 1024);
     };
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  if (!isWideScreen) {
+    console.log('Rendering WideScreenMessage');
+    return <WideScreenMessage />;
+  }
+
+  console.log('Rendering main app');
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
@@ -87,40 +126,41 @@ function App() {
           <ThemeProvider theme={theme}>
             <RTL>
               <CssBaseline />
-              <Router>
-                {isWideScreen ? (
-                  <AuthProvider>
-                    <ChatProvider>
-                      <NotesProvider>
-                        <SnackbarProvider>
-                          <RouteLogger />
-                          <Routes>
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/" element={
-                              <ProtectedRoute>
-                                <>
-                                  <MainLayout />
-                                </>
-                              </ProtectedRoute>
-                            }>
-                              {routes.map(({ path, element }) => (
-                                <Route
-                                  key={path}
-                                  path={path === '/' ? '' : path}
-                                  element={element}
-                                />
-                              ))}
-                            </Route>
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                          </Routes>
-                        </SnackbarProvider>
-                      </NotesProvider>
-                    </ChatProvider>
-                  </AuthProvider>
-                ) : (
-                  <WideScreenMessage />
-                )}
-              </Router>
+              <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
+                <ChatProvider>
+                  <NotesProvider>
+                    <RouteLogger />
+                    <Routes>
+                      <Route path="/login" element={<Login />} />
+                      <Route
+                        path="/*"
+                        element={
+                          currentUser ? (
+                            <ProtectedRoute>
+                              <MainLayout>
+                                <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
+                                  <Routes>
+                                    {routes.map((route) => (
+                                      <Route
+                                        key={route.path}
+                                        path={route.path}
+                                        element={route.element}
+                                      />
+                                    ))}
+                                    <Route path="*" element={<NotFound />} /> // Add the route for 404 pages
+                                  </Routes>
+                                </SnackbarProvider>
+                              </MainLayout>
+                            </ProtectedRoute>
+                          ) : (
+                            <Navigate to="/login" />
+                          )
+                        }
+                      />
+                    </Routes>
+                  </NotesProvider>
+                </ChatProvider>
+              </SnackbarProvider>
             </RTL>
           </ThemeProvider>
         </StyledEngineProvider>
@@ -129,4 +169,15 @@ function App() {
   );
 }
 
-export default App;
+function Root() {
+  console.log('Root component rendered');
+  return (
+    <Router>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </Router>
+  );
+}
+
+export default Root;

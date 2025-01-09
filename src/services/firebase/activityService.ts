@@ -33,8 +33,8 @@ export const activityService = {
     await setDoc(activityRef, {
       ...activity,
       createdAt: Timestamp.fromDate(activity.createdAt),
-      completedAt: activity.completedAt ? Timestamp.fromDate(activity.completedAt) : null,
-      dueDate: activity.dueDate ? Timestamp.fromDate(activity.dueDate) : null,
+      completedAt: 'completedAt' in activity && activity.completedAt ? Timestamp.fromDate(activity.completedAt) : null,
+      dueDate: 'dueDate' in activity && activity.dueDate ? Timestamp.fromDate(activity.dueDate) : null,
     });
   },
 

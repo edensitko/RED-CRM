@@ -53,6 +53,11 @@ export const taskService = {
         priority: task.priority,
         status: task.status,
       },
+      id: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      
+      updatedBy: ''
     });
   },
 
@@ -67,19 +72,24 @@ export const taskService = {
     await updateDoc(taskRef, updateData);
   },
 
-  async getTask(id: string): Promise<Task | null> {
-    const taskRef = doc(db, TASKS_COLLECTION, id);
-    const taskDoc = await getDoc(taskRef);
+  async getTask(userId: string, id: string): Promise<Task | null> {
+    const taskDoc = await getDoc(doc(db, TASKS_COLLECTION, id));
+  
     if (!taskDoc.exists()) return null;
+  
+    const taskData = taskDoc.data();
+    if (taskData.userId !== userId) return null;
+  
     return convertTaskFromFirestore(taskDoc);
   },
 
-  async getTasksByAssignee(assigneeId: string, maxResults?: number): Promise<Task[]> {
+  async getTasksByAssignee(userId: string, assigneeId: string, maxResults?: number): Promise<Task[]> {
     const tasksQuery = query(
       collection(db, TASKS_COLLECTION),
       where('assignedTo', '==', assigneeId),
+      where('userId', '==', userId),
       where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc')
+      orderBy('dueDate', 'asc')
     );
 
     const finalQuery = maxResults ? query(tasksQuery, limit(maxResults)) : tasksQuery;
@@ -87,10 +97,11 @@ export const taskService = {
     return querySnapshot.docs.map(convertTaskFromFirestore);
   },
 
-  async getTasksByStatus(status: Task['status'], maxResults?: number): Promise<Task[]> {
+  async getTasksByStatus(userId: string, status: Task['status'], maxResults?: number): Promise<Task[]> {
     const tasksQuery = query(
       collection(db, TASKS_COLLECTION),
       where('status', '==', status),
+      where('userId', '==', userId),
       where('dueDate', '>=', new Date()),
       orderBy('dueDate', 'asc')
     );
@@ -114,6 +125,11 @@ export const taskService = {
       entityId: id,
       description: 'מחיקת משימה',
       createdBy: deletedBy,
+      id: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+ 
+      updatedBy: ''
     });
   },
 };

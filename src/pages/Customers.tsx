@@ -37,6 +37,7 @@ import {
   ThemeProvider,
   createTheme,
   CssBaseline,
+  Fade,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -52,7 +53,7 @@ import {
 import { motion } from 'framer-motion';
 import { customerService } from '../services/firebase/customerService'; 
 import { Customer } from '../types/schemas';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   collection, 
@@ -147,8 +148,22 @@ const ltrTheme = createTheme({
   },
 });
 
+import { styled } from '@mui/material/styles';
+
+const AnimatedDialog = styled(Dialog)`
+  & .MuiDialog-paper {
+    direction: ltr;
+    text-align: center;
+    background-color: #ffffff;
+    padding: 32px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    border: 1px solid #d32f2f;
+  }
+`;
+
 const Customers: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { user, signOut } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -175,14 +190,28 @@ const Customers: React.FC = () => {
     phone: '',
     companyName: '',
     status: 'פעיל',
-    value: 0,
+    source: '',
+    notes: '',
+    tags: [],
+    lastContact: new Date(),
+    website: '',
+    industry: '',
+    size: 'small',
+    annualRevenue: 0,
+    paymentTerms: '',
   });
   const [notes, setNotes] = useState<string>('');
   const [openNoteDialog, setOpenNoteDialog] = useState(false);
 
   useEffect(() => {
+    console.log('Checking Firebase connection...');
+    console.log('Firebase app initialized:', !!db);
+    console.log('Auth state:', { 
+      user: user?.uid,
+      isAuthenticated: !!user 
+    });
     fetchCustomers();
-  }, [currentUser]);
+  }, [user]);
 
   useEffect(() => {
     let filtered = [...customers];
@@ -204,8 +233,8 @@ const Customers: React.FC = () => {
     // Sorting
     if (sortColumn) {
       filtered.sort((a, b) => {
-        const valueA = a[sortColumn];
-        const valueB = b[sortColumn];
+        const valueA = a[sortColumn] ?? '';
+        const valueB = b[sortColumn] ?? '';
         
         if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
         if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
@@ -232,39 +261,25 @@ const Customers: React.FC = () => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      if (!currentUser) return;
+      if (!user) {
+        console.log('No user found, returning early');
+        return;
+      }
 
-      // Fetch all non-deleted customers
-      const baseQuery = query(
-        collection(db, CUSTOMERS_COLLECTION),
-        where('isDeleted', '==', false)
-      );
+      console.log('Fetching customers for user:', user.uid);
       
-      const querySnapshot = await getDocs(baseQuery);
-      const fetchedCustomers = querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return {
-            ...data,
-            id: doc.id,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-            lastContact: data.lastContact?.toDate() || null,
-            contracts: data.contracts?.map((contract: any) => ({
-              ...contract,
-              startDate: contract.startDate?.toDate() || new Date(),
-              endDate: contract.endDate?.toDate() || new Date(),
-            })) || [],
-            status: data.status || 'פעיל',
-            isDeleted: data.isDeleted || false,
-          } as Customer;
-        })
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort in descending order after fetching
+      // Use getAllCustomers to fetch all non-deleted customers
+      const fetchedCustomers = await customerService.getAllCustomers(user.uid);
+      console.log('Fetched customers:', fetchedCustomers.length);
 
       setCustomers(fetchedCustomers);
       setFilteredCustomers(fetchedCustomers);
     } catch (error) {
       console.error('Error fetching customers:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       showSnackbar('שגיאה בטעינת הלקוחות', 'error');
     } finally {
       setLoading(false);
@@ -273,14 +288,15 @@ const Customers: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!user) return;
 
     try {
       const customerData: Customer = {
         ...formData,
         id: selectedCustomer?.id || uuidv4(),
-        createdBy: currentUser.uid,
-        updatedBy: currentUser.uid,
+        userId: user.uid,  // Add this line
+        createdBy: user.uid,
+        updatedBy: user.uid,
         createdAt: selectedCustomer ? selectedCustomer.createdAt : new Date(),
         updatedAt: new Date(),
         lastContact: new Date(),
@@ -308,10 +324,10 @@ const Customers: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!currentUser) return;
+    if (!user) return;
 
     try {
-      await customerService.deleteCustomer(id, currentUser.uid);
+      await customerService.deleteCustomer(id, user.uid);
       await fetchCustomers();
       showSnackbar('הלקוח נמחק בהצלחה');
     } catch (error) {
@@ -329,7 +345,15 @@ const Customers: React.FC = () => {
       phone: '',
       companyName: '',
       status: 'פעיל', 
-      value: 0,
+      source: '',
+      notes: '',
+      tags: [],
+      lastContact: new Date(),
+      website: '',
+      industry: '',
+      size: 'small',
+      annualRevenue: 0,
+      paymentTerms: '',
     });
     setOpenEditDialog(true);
   };
@@ -348,7 +372,7 @@ const Customers: React.FC = () => {
   };
 
   const handleSaveNote = async () => {
-    if (!currentUser || !selectedCustomer) return;
+    if (!user || !selectedCustomer) return;
 
     try {
       await customerService.updateCustomer(selectedCustomer.id, { notes });
@@ -401,7 +425,7 @@ const Customers: React.FC = () => {
           }}
         >
           <TextField
-         fullWidth
+            fullWidth
             variant="outlined"
             label="חיפוש לקוחות"
             placeholder="חיפוש "
@@ -431,14 +455,17 @@ const Customers: React.FC = () => {
             startIcon={<AddIcon />} 
             onClick={() => handleOpenEditDialog()}
             sx={{ 
-              ml: 2,
+              mr: 2,
+              backgroundColor: ltrTheme.palette.primary.main,
               '&:hover': {
-                backgroundColor: 'primary.dark',
+                backgroundColor: ltrTheme.palette.primary.dark,
               }
             }}
           >
             לקוח חדש
           </Button>
+         
+        
           <FormControl sx={{ ml: 2, minWidth: 150 }}>
             <InputLabel id="filter-status-label">הכל</InputLabel>
             <Select
@@ -483,7 +510,18 @@ const Customers: React.FC = () => {
             <Table sx={{ minWidth: 650 }} aria-label="customers table">
               <TableHead>
                 <TableRow>
-                  {(['firstName', 'companyName', 'email', 'phone', 'status', 'createdAt'] as (keyof Customer)[]).map((column) => (
+                  {([
+                    'firstName',
+                    'companyName',
+                    'email',
+                    'phone',
+                    'status',
+                    'industry',
+                    'size',
+                    'annualRevenue',
+                    'website',
+                    'createdAt'
+                  ] as (keyof Customer)[]).map((column) => (
                     <TableCell key={column}>
                       <Box 
                         sx={{ 
@@ -498,6 +536,10 @@ const Customers: React.FC = () => {
                         {column === 'email' && 'אימייל'}
                         {column === 'phone' && 'טלפון'}
                         {column === 'status' && 'סטטוס'}
+                        {column === 'industry' && 'תעשייה'}
+                        {column === 'size' && 'גודל'}
+                        {column === 'annualRevenue' && 'הכנסה שנתית'}
+                        {column === 'website' && 'אתר'}
                         {column === 'createdAt' && 'תאריך יצירה'}
                         {sortColumn === column && (
                           sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
@@ -523,6 +565,16 @@ const Customers: React.FC = () => {
                         variant="outlined"
                       />
                     </TableCell>
+                    <TableCell>{customer.industry || '-'}</TableCell>
+                    <TableCell>{customer.size || '-'}</TableCell>
+                    <TableCell>{customer.annualRevenue?.toLocaleString() || '0'} ₪</TableCell>
+                    <TableCell>
+                      {customer.website ? (
+                        <a href={customer.website} target="_blank" rel="noopener noreferrer">
+                          {customer.website}
+                        </a>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>{customer.createdAt.toLocaleDateString('he-IL')}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={1}>
@@ -541,160 +593,170 @@ const Customers: React.FC = () => {
           </TableContainer>
         )}
 
-        <Dialog 
-          open={openEditDialog} 
-          onClose={() => setOpenEditDialog(false)} 
-          maxWidth="sm" 
-          fullWidth
-          component={motion.div}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          sx={{
-            '& .MuiDialog-paper': {
-              direction: 'ltr',
-              textAlign: 'center',
-              backgroundColor: '#ffffff',
-              padding: '32px',
-              borderRadius: '16px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
-              border: '1px solid #d32f2f',
-            }
-          }}
-        >
-          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-            {selectedCustomer ? `ערוך את ${selectedCustomer.firstName} ${selectedCustomer.lastName}` : 'ערוך לקוח'}
-          </DialogTitle>
-          <DialogContent>
-            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-              <Stack spacing={2}>
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    fullWidth
-                    label="שם פרטי"
-                    value={formData.firstName || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    required
-                    color="primary"
-                  />
-                  <TextField
-                    fullWidth
-                    label="שם משפחה"
-                    value={formData.lastName || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    required
-                    color="primary"
-                  />
-                </Stack>
-                <TextField
-                  fullWidth
-                  label="חברה"
-                  value={formData.companyName || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="אימייל"
-                  type="email"
-                  value={formData.email || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  required
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="טלפון"
-                  value={formData.phone || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  required
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="הערות"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  multiline
-                  rows={4}
-                  color="primary"
-                  onClick={handleOpenNoteDialog}
-                />
-              </Stack>
-              <DialogActions sx={{ mt: 2 }}>
-                <Button onClick={() => setOpenEditDialog(false)} color="secondary" variant="outlined">
-                  ביטול
-                </Button>
-                <Button type="submit" color="primary" variant="contained">
-                  שמור
-                </Button>
-                <Button onClick={handleSaveNote} color="primary" variant="outlined" startIcon={<NoteAddIcon />}>
-                  שמור הערה
-                </Button>
-              </DialogActions>
-            </Box>
-          </DialogContent>
-        </Dialog>
+        {openEditDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden"
+            >
+              <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white flex items-center">
+                  <PersonIcon className="ml-4" /> 
+                  {selectedCustomer ? 'ערוך לקוח' : 'צור לקוח חדש'}
+                </h2>
+                <motion.button
+                  whileHover={{ rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setOpenEditDialog(false)}
+                  className="text-red-500 hover:bg-red-500 hover:text-white rounded-full p-2 transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </motion.button>
+              </div>
 
-        <Dialog 
-          open={openNoteDialog} 
-          onClose={handleCloseNoteDialog} 
-          maxWidth="sm" 
-          fullWidth
-          component={motion.div}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          sx={{
-            '& .MuiDialog-paper': {
-              direction: 'ltr',
-              textAlign: 'center',
-              backgroundColor: '#ffffff',
-              padding: '32px',
-              borderRadius: '16px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
-              border: '1px solid #d32f2f',
-            }
-          }}
-        >
-          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-            הערות
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" color="text.secondary" sx={{ 
-              direction: 'ltr', 
-              textAlign: 'left',
-              unicodeBidi: 'bidi-override'
-            }}>
-              {notes}
-            </Typography>
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: 'center', mt: 2 }}>
-            <Button onClick={handleCloseNoteDialog} color="secondary" variant="outlined" sx={{ borderColor: '#d32f2f', color: '#d32f2f' }}>
-              סגור
-            </Button>
-          </DialogActions>
-        </Dialog>
+              <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      שם פרטי
+                    </label>
+                    <motion.input
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 }}
+                      type="text"
+                      value={formData.firstName || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                      required
+                      placeholder="הכנס שם פרטי"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                    />
+                  </div>
 
-        <Dialog 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      שם משפחה
+                    </label>
+                    <motion.input
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2 }}
+                      type="text"
+                      value={formData.lastName || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                      required
+                      placeholder="הכנס שם משפחה"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      אימייל
+                    </label>
+                    <motion.input
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                      type="email"
+                      value={formData.email || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                      placeholder="הכנס כתובת אימייל"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      טלפון
+                    </label>
+                    <motion.input
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 }}
+                      type="tel"
+                      value={formData.phone || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      required
+                      placeholder="הכנס מספר טלפון"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    חברה
+                  </label>
+                  <motion.input
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    type="text"
+                    value={formData.companyName || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+                    placeholder="הכנס שם חברה"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    הערות
+                  </label>
+                  <motion.textarea
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={4}
+                    placeholder="הכנס הערות"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-4">
+                  <motion.button
+                    type="button"
+                    onClick={() => setOpenEditDialog(false)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    ביטול
+                  </motion.button>
+                  <motion.button
+                    type="submit"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center"
+                  >
+                    <span className="ml-2">✓</span> {selectedCustomer ? 'עדכן לקוח' : 'צור לקוח'}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        <AnimatedDialog 
           open={openViewDialog} 
           onClose={() => setOpenViewDialog(false)} 
           maxWidth="sm" 
           fullWidth
-          component={motion.div}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          sx={{
-            '& .MuiDialog-paper': {
-              direction: 'ltr',
-              textAlign: 'center',
-              backgroundColor: '#ffffff',
-              padding: '32px',
-              borderRadius: '16px',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
-              border: '1px solid #d32f2f',
-            }
+          TransitionComponent={Fade}
+          PaperProps={{
+            component: motion.div,
+            initial: { opacity: 0, scale: 0.9 },
+            animate: { opacity: 1, scale: 1 },
+            transition: { duration: 0.3 }
           }}
         >
           <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
@@ -740,7 +802,39 @@ const Customers: React.FC = () => {
               סגור
             </Button>
           </DialogActions>
-        </Dialog>
+        </AnimatedDialog>
+
+        <AnimatedDialog 
+          open={openNoteDialog} 
+          onClose={handleCloseNoteDialog} 
+          maxWidth="sm" 
+          fullWidth
+          TransitionComponent={Fade}
+          PaperProps={{
+            component: motion.div,
+            initial: { opacity: 0, scale: 0.9 },
+            animate: { opacity: 1, scale: 1 },
+            transition: { duration: 0.3 }
+          }}
+        >
+          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
+            הערות
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" color="text.secondary" sx={{ 
+              direction: 'ltr', 
+              textAlign: 'left',
+              unicodeBidi: 'bidi-override'
+            }}>
+              {notes}
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', mt: 2 }}>
+            <Button onClick={handleCloseNoteDialog} color="secondary" variant="outlined" sx={{ borderColor: '#d32f2f', color: '#d32f2f' }}>
+              סגור
+            </Button>
+          </DialogActions>
+        </AnimatedDialog>
 
         <Snackbar
           open={snackbar.open}

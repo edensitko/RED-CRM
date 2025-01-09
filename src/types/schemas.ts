@@ -57,7 +57,7 @@ export interface Task extends BaseEntity {
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high';
-  dueDate: Date;
+  dueDate?: Date;
   assignedTo: string;
   relatedTo?: {
     type: 'customer' | 'lead';
@@ -85,19 +85,12 @@ export interface Task extends BaseEntity {
 }
 
 export interface Customer extends BaseEntity {
-  phone: ReactNode;
-  companyName?: string;
+  userId: string;
   firstName: string;
   lastName: string;
   email: string;
-  phoneNumber: string;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
+  phone: string;
+  companyName: string;
   status: 'פעיל' | 'לא פעיל';
   source: string;
   notes: string;
@@ -108,8 +101,6 @@ export interface Customer extends BaseEntity {
   size?: 'small' | 'medium' | 'large';
   annualRevenue?: number;
   paymentTerms?: string;
-  creditLimit?: number;
-  taxId?: string;
   contracts?: Array<{
     id: string;
     startDate: Date;
@@ -154,7 +145,7 @@ export interface Lead extends BaseEntity {
   phoneNumber: string;
   company?: string;
   source: string;
-  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
+  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost' | 'חדש' | 'נוצר קשר' | 'מוסמך' | 'הצעה' | 'משא ומתן' | 'סגור זכה' | 'סגור הפסיד';
   score: number;
   notes: string;
   estimatedValue: number;
@@ -181,6 +172,19 @@ export interface Lead extends BaseEntity {
   preferredContactTime?: 'morning' | 'afternoon' | 'evening';
   marketingCampaign?: string;
   referralSource?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  customerId: string;
+  status: 'planning' | 'in_progress' | 'completed';
+  startDate: string;
+  endDate: string;
+  budget: number;
+  createdAt: string;
+  isFavorite?: boolean;
 }
 
 export interface Report extends BaseEntity {
@@ -229,4 +233,6 @@ export interface Activity extends BaseEntity {
   metadata?: Record<string, any>;
   ip?: string;
   userAgent?: string;
+  completedAt?: Date;
+  dueDate?: Date;
 }

@@ -2,88 +2,154 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  ListItemSecondaryAction,
-  Avatar,
-  IconButton,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
   TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  Paper,
   InputAdornment,
   Chip,
-  Divider,
   Skeleton,
   Snackbar,
   Alert,
   Stack,
+  IconButton,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
   ThemeProvider,
   createTheme,
   CssBaseline,
-  SelectChangeEvent,
+  Grid,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Phone as PhoneIcon,
-  Email as EmailIcon,
-  NoteAdd as NoteAddIcon,
+  FilterList as FilterListIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
-import { 
-  collection,
-  doc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy
-} from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { motion } from 'framer-motion';
+import { leadService } from '../services/firebase/leadService';
+import { Lead } from '../types/schemas';
 import { useAuth } from '../contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
-interface Lead {
-  id: string;
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  source: string;
-  status: 'חדש' | 'בתהליך' | 'הושלם' | 'לא רלוונטי';
-  created: string;
-  lastContact: string;
-  notes: string;
-}
+const LEADS_COLLECTION = 'leads';
 
-const initialLeadState: Omit<Lead, 'id'> = {
-  name: '',
-  company: '',
-  email: '',
-  phone: '',
-  source: '',
-  status: 'חדש',
-  created: '',
-  lastContact: '',
-  notes: '',
-};
+// LTR Theme with Red Palette
+const ltrTheme = createTheme({
+  direction: 'ltr',
+  palette: {
+    primary: {
+      main: '#d32f2f',
+      contrastText: '#ffffff',
+    },
+    secondary: {
+      main: '#ff1744',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#333333',
+      secondary: '#666666',
+    },
+  },
+  typography: {
+    fontFamily: [
+      'Rubik',
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Roboto',
+      '"Helvetica Neue"',
+      'Arial',
+      'sans-serif',
+    ].join(','),
+    h4: {
+      fontWeight: 600,
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          padding: '16px',
+          borderRadius: 12,
+          boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiInputBase-root': {
+            borderRadius: 8,
+            direction: 'ltr',
+          },
+        },
+      },
+    },
+  },
+});
 
 const Leads: React.FC = () => {
   const { currentUser } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [openDialog, setOpenDialog] = useState(false);
+  const [sortColumn, setSortColumn] = useState<keyof Lead | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [openEditDialog, setOpenEditDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [formData, setFormData] = useState(initialLeadState);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+  const [formData, setFormData] = useState<Partial<Lead>>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: '',
+    company: '',
+    status: 'חדש',
+    source: '',
+    notes: '',
+    lastContact: new Date(),
+    budget: 0,
+    industry: '',
+    score: 0,
+    tags: [],
+    estimatedValue: 0,
+    assignedTo: ''
+  });
 
   useEffect(() => {
     if (currentUser) {
@@ -91,27 +157,65 @@ const Leads: React.FC = () => {
     }
   }, [currentUser]);
 
-  const fetchLeads = async () => {
-    if (!currentUser) {
-      showSnackbar('נא להתחבר למערכת', 'error');
-      return;
+  useEffect(() => {
+    let filtered = [...leads];
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter((lead) =>
+        Object.values(lead).some((value) =>
+          value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
     }
 
+    // Status filter
+    if (filterStatus) {
+      filtered = filtered.filter((lead) => lead.status === filterStatus);
+    }
+
+    // Sorting
+    if (sortColumn) {
+      filtered.sort((a, b) => {
+        const valueA = a[sortColumn] ?? '';
+        const valueB = b[sortColumn] ?? '';
+        
+        if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+        if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    setFilteredLeads(filtered);
+  }, [leads, searchTerm, filterStatus, sortColumn, sortDirection]);
+
+  const handleSort = (column: keyof Lead) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const fetchLeads = async () => {
     try {
       setLoading(true);
-      const leadsRef = collection(db, `users/${currentUser.uid}/leads`);
-      const q = query(leadsRef, orderBy('created', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
-      const leadsData: Lead[] = [];
-      querySnapshot.forEach((doc) => {
-        leadsData.push({
-          id: doc.id,
-          ...doc.data() as Omit<Lead, 'id'>
-        });
-      });
-      
-      setLeads(leadsData);
+      if (!currentUser) {
+        console.log('No user found, returning early');
+        return;
+      }
+
+      console.log('Fetching leads for user:', currentUser.uid);
+      const fetchedLeads = await leadService.getLeadsByAssignee(currentUser.uid);
+      console.log('Fetched leads:', fetchedLeads.length);
+
+      setLeads(fetchedLeads);
+      setFilteredLeads(fetchedLeads);
     } catch (error) {
       console.error('Error fetching leads:', error);
       showSnackbar('שגיאה בטעינת הלידים', 'error');
@@ -122,126 +226,99 @@ const Leads: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) {
-      showSnackbar('נא להתחבר למערכת', 'error');
-      return;
-    }
+    if (!currentUser) return;
 
     try {
-      setLoading(true);
-      const leadData = {
-        name: formData.name,
-        company: formData.company,
-        email: formData.email,
-        phone: formData.phone,
-        source: formData.source,
-        status: formData.status,
-        notes: formData.notes,
-        created: selectedLead ? formData.created : new Date().toISOString(),
-        lastContact: formData.lastContact || new Date().toISOString()
-      };
-      
+      const leadData: Lead = {
+        ...formData,
+        id: selectedLead?.id || uuidv4(),
+        createdBy: currentUser.uid,
+        updatedBy: currentUser.uid,
+        assignedTo: currentUser.uid,
+        createdAt: selectedLead ? selectedLead.createdAt : new Date(),
+        updatedAt: new Date(),
+        lastContact: new Date(),
+        isDeleted: false,
+        meetings: [],
+      } as Lead;
+
       if (selectedLead) {
-        const leadDoc = doc(db, `users/${currentUser.uid}/leads/${selectedLead.id}`);
-        await updateDoc(leadDoc, leadData);
-        showSnackbar('הליד עודכן בהצלחה', 'success');
+        await leadService.updateLead(selectedLead.id, leadData);
+        showSnackbar('הליד עודכן בהצלחה');
       } else {
-        const leadsRef = collection(db, `users/${currentUser.uid}/leads`);
-        await addDoc(leadsRef, leadData);
-        showSnackbar('ליד חדש נוצר בהצלחה', 'success');
+        await leadService.createLead(leadData);
+        showSnackbar('ליד חדש נוצר בהצלחה');
       }
-      
-      handleCloseDialog();
+
       fetchLeads();
+      setOpenEditDialog(false);
+      setSelectedLead(null);
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phoneNumber: '',
+        company: '',
+        status: 'חדש',
+        source: '',
+        notes: '',
+        lastContact: new Date(),
+        budget: 0,
+        industry: '',
+        score: 0,
+        tags: [],
+        estimatedValue: 0,
+        assignedTo: ''
+      });
     } catch (error) {
       console.error('Error saving lead:', error);
       showSnackbar('שגיאה בשמירת הליד', 'error');
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!currentUser) {
-      showSnackbar('נא להתחבר למערכת', 'error');
-      return;
-    }
-
-    if (window.confirm('האם אתה בטוח שברצונך למחוק ליד זה?')) {
-      try {
-        setLoading(true);
-        const leadDoc = doc(db, `users/${currentUser.uid}/leads/${id}`);
-        await deleteDoc(leadDoc);
-        showSnackbar('הליד נמחק בהצלחה', 'success');
-        fetchLeads();
-      } catch (error) {
-        console.error('Error deleting lead:', error);
-        showSnackbar('שגיאה במחיקת הליד', 'error');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const showSnackbar = (message: string, severity: 'success' | 'error') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const filteredLeads = leads.filter((lead) =>
-    Object.values(lead).some((value) =>
-      value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
-
-  const handleOpenDialog = (lead: Lead | null = null) => {
-    setSelectedLead(lead);
-    setFormData(lead || initialLeadState);
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setSelectedLead(null);
-    setFormData(initialLeadState);
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSaveNote = async () => {
-    if (!currentUser || !selectedLead) return;
+    if (!currentUser) return;
 
     try {
-      await updateDoc(doc(db, `users/${currentUser.uid}/leads/${selectedLead.id}`), { notes: formData.notes });
-      showSnackbar('הערה נשמרה בהצלחה' , 'success');
+      await leadService.deleteLead(id, currentUser.uid);
+      await fetchLeads();
+      showSnackbar('הליד נמחק בהצלחה');
     } catch (error) {
-      console.error('Error saving note:', error);
-      showSnackbar('שגיאה בשמירת ההערה', 'error');
+      console.error('Error deleting lead:', error);
+      showSnackbar('שגיאה במחיקת הליד', 'error');
     }
+  };
+
+  const handleOpenEditDialog = (lead?: Lead) => {
+    setSelectedLead(lead || null);
+    setFormData(lead || {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phoneNumber: '',
+      company: '',
+      status: 'חדש',
+      source: '',
+      notes: '',
+      lastContact: new Date(),
+      budget: 0,
+      industry: '',
+      score: 0,
+      tags: [],
+      estimatedValue: 0,
+      assignedTo: ''
+    });
+    setOpenEditDialog(true);
   };
 
   return (
-    <ThemeProvider theme={createTheme({
-      palette: {
-        primary: {
-          main: '#d32f2f',
-        },
-      },
-    })}>
+    <ThemeProvider theme={ltrTheme}>
       <CssBaseline />
       <Box 
-        component="div"
+        component={motion.div}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
         sx={{ 
           p: 3, 
           direction: 'ltr',
@@ -270,7 +347,8 @@ const Leads: React.FC = () => {
           <TextField
             fullWidth
             variant="outlined"
-            placeholder="חפש לידים..."
+            label="חיפוש לידים"
+            placeholder="חיפוש"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -291,195 +369,266 @@ const Leads: React.FC = () => {
               }
             }}
           />
-          <Button 
+          <Button  
             variant="contained" 
-            color="primary" 
             startIcon={<AddIcon />} 
-            onClick={() => handleOpenDialog()}
+            onClick={() => handleOpenEditDialog()}
             sx={{ 
-              ml: 2,
+              mr: 2,
+              backgroundColor: ltrTheme.palette.primary.main,
               '&:hover': {
-                backgroundColor: 'primary.dark',
+                backgroundColor: ltrTheme.palette.primary.dark,
               }
             }}
           >
             ליד חדש
           </Button>
+
+          <FormControl sx={{ ml: 2, minWidth: 150 }}>
+            <InputLabel id="filter-status-label">סטטוס</InputLabel>
+            <Select
+              labelId="filter-status-label"
+              id="filter-status"
+              value={filterStatus}
+              label="סטטוס"
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <MenuItem value="">הכל</MenuItem>
+              <MenuItem value="חדש">חדש</MenuItem>
+              <MenuItem value="בתהליך">בתהליך</MenuItem>
+              <MenuItem value="הושלם">הושלם</MenuItem>
+              <MenuItem value="לא רלוונטי">לא רלוונטי</MenuItem>
+            </Select>
+          </FormControl>
         </Paper>
 
         {loading ? (
-          <List>
-            {[...Array(6)].map((_, index) => (
-              <ListItem key={index}>
-                <ListItemAvatar>
-                  <Skeleton variant="circular" width={40} height={40} />
-                </ListItemAvatar>
-                <ListItemText
-                  primary={<Skeleton variant="text" width="60%" />}
-                  secondary={<Skeleton variant="text" width="40%" />}
-                />
-              </ListItem>
-            ))}
-          </List>
+          <TableContainer component={Paper}>
+            <Table sx={{ minWidth: 650 }} aria-label="leads table">
+              <TableHead>
+                <TableRow>
+                  {['שם', 'חברה', 'אימייל', 'טלפון', 'סטטוס', 'מקור', 'תקציב', 'תאריך יצירה', 'פעולות'].map((header) => (
+                    <TableCell key={header}>{header}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {[...Array(6)].map((_, index) => (
+                  <TableRow key={index}>
+                    {[...Array(9)].map((_, cellIndex) => (
+                      <TableCell key={cellIndex}>
+                        <Skeleton variant="text" width="80%" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         ) : (
-          <List>
-            {filteredLeads.map((lead, index) => (
-              <React.Fragment key={lead.id}>
-                <ListItem
-                  secondaryAction={
-                    <Stack direction="row" spacing={1}>
-                      <IconButton edge="end" onClick={() => handleOpenDialog(lead)} color="primary">
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton edge="end" onClick={() => handleDelete(lead.id)} color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    </Stack>
-                  }
-                  sx={{ 
-                    bgcolor: 'background.paper', 
-                    borderRadius: 2, 
-                    mb: 1,
-                    transition: 'background-color 0.3s, transform 0.2s',
-                    '&:hover': {
-                      transform: 'scale(1.02)',
-                    }
-                  }}
-                >
-                  <ListItemAvatar>
-                    <Avatar sx={{ 
-                      bgcolor: 'primary.main', 
-                      color: 'primary.contrastText',
-                      width: 48,
-                      height: 48,
-                    }}>
-                      {lead.name[0]}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="body1" color="text.primary">
-                          {lead.name}
-                        </Typography>
-                        <Chip 
-                          label={lead.status}
-                          color={lead.status === 'הושלם' ? 'success' : lead.status === 'בתהליך' ? 'warning' : 'default'}
-                          size="small"
-                          variant="outlined"
-                        />
+          <TableContainer component={Paper}>
+            <Table sx={{ minWidth: 650 }} aria-label="leads table">
+              <TableHead>
+                <TableRow>
+                  {([
+                    'firstName',
+                    'company',
+                    'email',
+                    'phoneNumber',
+                    'status',
+                    'source',
+                    'budget',
+                    'createdAt'
+                  ] as (keyof Lead)[]).map((column) => (
+                    <TableCell key={column}>
+                      <Box 
+                        sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          cursor: 'pointer' 
+                        }} 
+                        onClick={() => handleSort(column)}
+                      >
+                        {column === 'firstName' && 'שם'}
+                        {column === 'company' && 'חברה'}
+                        {column === 'email' && 'אימייל'}
+                        {column === 'phoneNumber' && 'טלפון'}
+                        {column === 'status' && 'סטטוס'}
+                        {column === 'source' && 'מקור'}
+                        {column === 'budget' && 'תקציב'}
+                        {column === 'createdAt' && 'תאריך יצירה'}
+                        {sortColumn === column && (
+                          sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                        )}
                       </Box>
-                    }
-                    secondary={
-                      <>
-                        <Typography 
-                          variant="body2" 
-                          color="text.secondary" 
-                          component="span" 
-                          sx={{ display: 'block' }}
-                        >
-                          {lead.company}
-                        </Typography>
-                        <Typography 
-                          variant="body2" 
-                          color="text.secondary" 
-                          component="span" 
-                          sx={{ display: 'block' }}
-                        >
-                          {lead.email} | {lead.phone}
-                        </Typography>
-                      </>
-                    }
-                  />
-                </ListItem>
-                {index < filteredLeads.length - 1 && <Divider variant="inset" component="li" />}
-              </React.Fragment>
-            ))}
-          </List>
+                    </TableCell>
+                  ))}
+                  <TableCell>פעולות</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredLeads.map((lead) => (
+                  <TableRow key={lead.id} hover>
+                    <TableCell>{lead.firstName} {lead.lastName}</TableCell>
+                    <TableCell>{lead.company}</TableCell>
+                    <TableCell>{lead.email}</TableCell>
+                    <TableCell>{lead.phoneNumber}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={lead.status}
+                        color={
+                          lead.status === 'נוצר קשר' ? 'info' :
+                          lead.status === 'מוסמך' ? 'warning' :
+                          lead.status === 'סגור זכה' ? 'success' :
+                          'default'
+                        }
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{lead.source || '-'}</TableCell>
+                    <TableCell>{lead.budget?.toLocaleString() || '0'} ₪</TableCell>
+                    <TableCell>{lead.createdAt.toLocaleDateString('he-IL')}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1}>
+                        <IconButton onClick={() => handleOpenEditDialog(lead)} color="primary">
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDelete(lead.id)} color="error">
+                          <DeleteIcon />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
 
-        <Dialog 
-          open={openDialog} 
-          onClose={handleCloseDialog} 
-          maxWidth="sm" 
+        <Dialog
+          open={openEditDialog}
+          onClose={() => setOpenEditDialog(false)}
+          maxWidth="md"
           fullWidth
         >
-          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-            {selectedLead ? `ערוך את ${selectedLead.name}` : 'ליד חדש'}
-          </DialogTitle>
-          <DialogContent>
-            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="שם"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="חברה"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleInputChange}
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="אימייל"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="טלפון"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  required
-                  color="primary"
-                />
-                <TextField
-                  fullWidth
-                  label="הערות"
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  multiline
-                  rows={4}
-                  color="primary"
-                />
-              </Stack>
-              <DialogActions sx={{ mt: 2 }}>
-                <Button onClick={handleCloseDialog} color="secondary" variant="outlined">
-                  ביטול
-                </Button>
-                <Button type="submit" color="primary" variant="contained">
-                  שמור
-                </Button>
-                <Button onClick={handleSaveNote} color="primary" variant="outlined" startIcon={<NoteAddIcon />}>
-                  שמור הערה
-                </Button>
-              </DialogActions>
-            </Box>
-          </DialogContent>
+          <DialogTitle>{selectedLead ? 'עריכת ליד' : 'ליד חדש'}</DialogTitle>
+          <form onSubmit={handleSubmit}>
+            <DialogContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="שם פרטי"
+                    value={formData.firstName || ''}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="שם משפחה"
+                    value={formData.lastName || ''}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="אימייל"
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="טלפון"
+                    value={formData.phoneNumber || ''}
+                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="חברה"
+                    value={formData.company || ''}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel>סטטוס</InputLabel>
+                    <Select
+                      value={formData.status || 'חדש'}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
+                      label="סטטוס"
+                    >
+                      <MenuItem value="חדש">חדש</MenuItem>
+                      <MenuItem value="בתהליך">בתהליך</MenuItem>
+                      <MenuItem value="הושלם">הושלם</MenuItem>
+                      <MenuItem value="לא רלוונטי">לא רלוונטי</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="מקור"
+                    value={formData.source || ''}
+                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="תקציב"
+                    type="number"
+                    value={formData.budget || ''}
+                    onChange={(e) => setFormData({ ...formData, budget: Number(e.target.value) })}
+                    margin="normal"
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">₪</InputAdornment>,
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="הערות"
+                    multiline
+                    rows={4}
+                    value={formData.notes || ''}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    margin="normal"
+                  />
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenEditDialog(false)}>ביטול</Button>
+              <Button type="submit" variant="contained" color="primary">
+                {selectedLead ? 'עדכון' : 'יצירה'}
+              </Button>
+            </DialogActions>
+          </form>
         </Dialog>
 
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         >
-          <Alert 
-            onClose={handleCloseSnackbar} 
+          <Alert
+            onClose={() => setSnackbar({ ...snackbar, open: false })}
             severity={snackbar.severity}
             sx={{ width: '100%' }}
           >

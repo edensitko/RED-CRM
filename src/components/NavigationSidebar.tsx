@@ -27,19 +27,21 @@ import FormsIcon from '@mui/icons-material/Description';
 import DocumentIcon from '@mui/icons-material/Article';
 import ReportIcon from '@mui/icons-material/Report';
 import PaymentIcon from '@mui/icons-material/Payment';
-
+import EmojiObjectsIcon from '@mui/icons-material/EmojiObjects';
 const navigation = [
   { name: 'לוח בקרה', href: '/', icon: DashboardIcon },
   { name: 'לקוחות', href: '/customers', icon: PeopleIcon },
   { name: 'פרויקטים', href: '/projects', icon: ProjectIcon },
-  { name: 'משימות', href: '/tasks', icon: TaskIcon },
+  { name: 'המשימות שלי', href: '/tasks', icon: TaskIcon },
+  { name: 'הקצאות משימות', href: '/task-assignments', icon: TaskIcon },
   { name: 'אנליטיקה', href: '/analytics', icon: AnalyticsIcon },
   { name: 'לידים', href: '/leads', icon: LeadsIcon },
   { name: 'מכירות', href: '/sales', icon: SalesIcon },
   { name: 'תמיכה', href: '/support', icon: SupportIcon },
+  { name: 'example', href: '/example', icon: SupportIcon },
   { name: 'תהליכי עבודה', href: '/workflows', icon: WorkflowIcon },
+  { name: 'רעיונות', href: '/ideas', icon: EmojiObjectsIcon },
   { name: 'צ׳אט', href: '/chat', icon: ChatIcon },
-  { name: 'הקצאת משימות', href: '/task-assignment', icon: TaskIcon },
   { name: 'דיווחי זמן', href: '/time-reports', icon: TimeReportIcon },
   { name: 'טפסים', href: '/forms', icon: FormsIcon },
   { name: 'מסמכים', href: '/documents', icon: DocumentIcon },
