@@ -1,35 +1,50 @@
 import {
   collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
   query,
   where,
   orderBy,
   limit,
-  Timestamp,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
   DocumentData,
-  arrayContains,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Chat, Message } from '../../types/schemas';
+
+interface Message {
+  id: string;
+  content: string;
+  sender: string;
+  timestamp: Date;
+  read: boolean;
+}
+
+interface Chat {
+  id: string;
+  participants: string[];
+  lastMessage?: string;
+  lastMessageTimestamp?: Date;
+  unreadCount: number;
+}
 
 const CHATS_COLLECTION = 'chats';
 const MESSAGES_COLLECTION = 'messages';
+
+const convertTimestampToDate = (timestamp: Timestamp): Date => {
+  return timestamp.toDate();
+};
 
 const convertChatFromFirestore = (doc: DocumentData): Chat => {
   const data = doc.data();
   return {
     ...data,
     id: doc.id,
-    createdAt: data.createdAt?.toDate() || new Date(),
-    updatedAt: data.updatedAt?.toDate() || new Date(),
-    lastMessage: data.lastMessage ? {
-      ...data.lastMessage,
-      timestamp: data.lastMessage.timestamp?.toDate() || new Date(),
-    } : null,
+    lastMessageTimestamp: data.lastMessageTimestamp ? convertTimestampToDate(data.lastMessageTimestamp) : new Date(),
   };
 };
 
@@ -38,7 +53,7 @@ const convertMessageFromFirestore = (doc: DocumentData): Message => {
   return {
     ...data,
     id: doc.id,
-    timestamp: data.timestamp?.toDate() || new Date(),
+    timestamp: data.timestamp ? convertTimestampToDate(data.timestamp) : new Date(),
   };
 };
 
@@ -47,13 +62,7 @@ export const chatService = {
     const chatRef = doc(db, CHATS_COLLECTION, chat.id);
     await setDoc(chatRef, {
       ...chat,
-      createdAt: Timestamp.fromDate(chat.createdAt),
-      updatedAt: Timestamp.fromDate(chat.updatedAt),
-      lastMessage: chat.lastMessage ? {
-        ...chat.lastMessage,
-        timestamp: Timestamp.fromDate(chat.lastMessage.timestamp),
-      } : null,
-      isDeleted: false,
+      lastMessageTimestamp: chat.lastMessageTimestamp ? Timestamp.fromDate(chat.lastMessageTimestamp) : null,
     });
   },
 
@@ -61,11 +70,7 @@ export const chatService = {
     const chatRef = doc(db, CHATS_COLLECTION, id);
     const updateData = {
       ...updates,
-      updatedAt: Timestamp.fromDate(new Date()),
-      lastMessage: updates.lastMessage ? {
-        ...updates.lastMessage,
-        timestamp: Timestamp.fromDate(updates.lastMessage.timestamp),
-      } : undefined,
+      lastMessageTimestamp: updates.lastMessageTimestamp ? Timestamp.fromDate(updates.lastMessageTimestamp) : undefined,
     };
     await updateDoc(chatRef, updateData);
   },
@@ -81,8 +86,7 @@ export const chatService = {
     const baseQuery = query(
       collection(db, CHATS_COLLECTION),
       where('participants', 'array-contains', userId),
-      where('isDeleted', '==', false),
-      orderBy('lastMessage.timestamp', 'desc')
+      orderBy('lastMessageTimestamp', 'desc')
     );
     
     const finalQuery = maxResults ? query(baseQuery, limit(maxResults)) : baseQuery;
@@ -102,12 +106,8 @@ export const chatService = {
     
     // Update the chat's last message
     await this.updateChat(chatId, {
-      lastMessage: {
-        text: message.text,
-        senderId: message.senderId,
-        timestamp: message.timestamp,
-      },
-      updatedAt: new Date(),
+      lastMessage: message.content,
+      lastMessageTimestamp: message.timestamp,
     });
   },
 

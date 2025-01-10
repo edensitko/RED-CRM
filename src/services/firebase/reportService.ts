@@ -30,17 +30,22 @@ export const reportService = {
       } : null,
     });
 
+    // Log activity
     await activityService.logActivity({
+      id: report.id,
       type: 'create',
       entityType: 'report',
       entityId: report.id,
-      description: 'יצירת דוח חדש',
+      description: `Created new report: ${report.name}`,
       createdBy: report.createdBy,
+      createdAt: new Date(),
+      updatedBy: report.createdBy,
+      updatedAt: new Date(),
       metadata: {
         reportName: report.name,
         category: report.category,
-        type: report.type,
-      },
+        type: report.type
+      }
     });
   },
 
@@ -58,14 +63,18 @@ export const reportService = {
     await updateDoc(reportRef, updateData);
 
     await activityService.logActivity({
+      id: id,
       type: 'update',
       entityType: 'report',
       entityId: id,
-      description: 'עדכון דוח',
-      createdBy: updates.updatedBy!,
+      description: `Updated report: ${updates.title || 'Untitled'}`,
+      createdBy: updates.updatedBy,
+      createdAt: new Date(),
+      updatedBy: updates.updatedBy,
+      updatedAt: new Date(),
       metadata: {
-        updatedFields: Object.keys(updates),
-      },
+        updatedFields: Object.keys(updates)
+      }
     });
   },
 

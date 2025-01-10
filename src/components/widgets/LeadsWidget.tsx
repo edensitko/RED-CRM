@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, Box, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { Paper, Typography, List, ListItem, ListItemText, Divider } from '@mui/material';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';

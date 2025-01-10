@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import {
   Person as PersonIcon,
-  PersonAdd as PersonAddIcon,
+ 
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { Activity } from '../../types/schemas';

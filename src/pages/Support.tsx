@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { getDatabase, ref, onValue, push, update, remove } from 'firebase/database';
-import { useAuth } from '../contexts/AuthContext';
-import { motion } from 'framer-motion';
-import { FaPlus, FaTrash, FaEdit, FaSpinner, FaTools } from 'react-icons/fa';
+
+import {  FaTools } from 'react-icons/fa';
 
 // interface Ticket {
 //   id: string;

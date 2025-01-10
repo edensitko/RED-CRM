@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { getDatabase, ref, onValue, push, update, remove } from 'firebase/database';
-import { useAuth } from '../contexts/AuthContext';
+import React from 'react';
 import { FaTools } from 'react-icons/fa';
 
 interface TimeEntry {

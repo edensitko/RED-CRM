@@ -32,16 +32,20 @@ export const salesService = {
         const data = child.val();
         salesData.push({
           id: child.key || '',
-          customerName: data.customerName || '',
+          customer: data.customer || '',
           customerId: data.customerId || '',
           productName: data.productName || '',
           amount: data.amount || 0,
           status: ['טיוטא', 'מו"מ', 'סגור'].includes(data.status) ? data.status : 'טיוטא',
           priority: ['נמוך', 'בינוני', 'גבוה'].includes(data.priority) ? data.priority : 'בינוני',
           expectedCloseDate: data.expectedCloseDate || '',
-          actualCloseDate: data.actualCloseDate,
-          notes: data.notes
-        });
+          actualCloseDate: data.actualCloseDate || null,
+          notes: data.notes || '',
+          title: data.title || '',
+          owner: data.owner || '',
+          stage: data.stage || 'initial',
+          probability: data.probability || 0
+        } as Sale);
       });
       callback(salesData);
     }, (error) => {
@@ -62,8 +66,20 @@ export const salesService = {
         if (data.status === status) {
           salesData.push({
             id: child.key || '',
-            ...data
-          });
+            customer: data.customer || '',
+            customerId: data.customerId || '',
+            productName: data.productName || '',
+            amount: data.amount || 0,
+            status: data.status || 'pending',
+            priority: ['נמוך', 'בינוני', 'גבוה'].includes(data.priority) ? data.priority : 'בינוני',
+            expectedCloseDate: data.expectedCloseDate || '',
+            actualCloseDate: data.actualCloseDate || null,
+            notes: data.notes || '',
+            title: data.title || '',
+            owner: data.owner || '',
+            stage: data.stage || 'initial',
+            probability: data.probability || 0
+          } as Sale);
         }
       });
       callback(salesData);

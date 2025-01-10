@@ -6,7 +6,7 @@ import {
   List, 
   ListItem, 
   ListItemText, 
-  LinearProgress,
+  
   CircularProgress,
   IconButton,
   Tooltip,
@@ -16,26 +16,13 @@ import {
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 
-interface TeamMember {
-  id: string;
-  name: string;
-  avatar: string;
-  progress: number;
-  color: string;
-}
+
 
 interface TeamPerformanceWidgetProps {
   preview?: boolean;
   data?: any;
   onRefresh: () => void;
 }
-
-const defaultTeamData = [
-  { id: '1', name: 'דניאל כהן', avatar: 'DC', progress: 0, color: '#4CAF50' },
-  { id: '2', name: 'רחל לוי', avatar: 'RL', progress: 0, color: '#2196F3' },
-  { id: '3', name: 'משה גולן', avatar: 'MG', progress: 0, color: '#FF9800' },
-  { id: '4', name: 'שירה אדרי', avatar: 'SA', progress: 0, color: '#9C27B0' },
-];
 
 const TeamPerformanceWidget: React.FC<TeamPerformanceWidgetProps> = ({ preview = false, data, onRefresh }) => {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);

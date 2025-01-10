@@ -65,7 +65,7 @@ const routes = [
   { path: '/reports', element: <Reports /> },
   { path: '/payments', element: <Payments /> },
   { path: '/task-assignments', element: <TaskAssignment /> },
-  { path: '/example', element: <StylesScreen /> },
+  // { path: '/example', element: <StylesScreen /> },
   { path: '*', element: <NotFound /> },
 ];
 

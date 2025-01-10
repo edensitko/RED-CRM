@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, Box, Icon } from '@mui/material';
+import { Paper, Typography, Box } from '@mui/material';
 import { WbSunny as SunIcon, Cloud as CloudIcon, Opacity as RainIcon } from '@mui/icons-material';
 
 const weatherData = {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Paper, Typography, Box, List, ListItem, ListItemText, Divider, CircularProgress, ListItemAvatar, Avatar, Chip } from '@mui/material';
+import { Paper, Typography, Box, List, ListItem, ListItemText, CircularProgress, ListItemAvatar, Avatar, Chip } from '@mui/material';
 import { Person as PersonIcon } from '@mui/icons-material';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';

@@ -1,17 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { getDatabase, ref, onValue, push, update, remove } from 'firebase/database';
-import { useAuth } from '../contexts/AuthContext';
-import { collection, getDocs, doc, updateDoc, addDoc, arrayUnion, arrayRemove, onSnapshot, deleteDoc } from 'firebase/firestore';
+import React, { Fragment, useEffect, useState } from 'react';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, getDocs } from 'firebase/firestore';
+import { FaSort, FaSortUp, FaSortDown, FaUser, FaEdit, FaTrash, FaCheck, FaChevronDown, FaHourglassHalf, FaPlayCircle, FaCheckCircle, FaExclamationCircle, FaExclamationTriangle, FaInfo, FaTimes, FaPlus, FaSync, FaTasks, FaClock, FaCalendarAlt, FaCalendar, FaCalendarDay, FaUsers, FaUndo, FaListUl, FaSearch, FaFilter, FaSave } from 'react-icons/fa';
+import { Listbox, Transition } from '@headlessui/react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Listbox } from '@headlessui/react';
-import { 
-  FaPlus, FaTimes, FaCheck, FaProjectDiagram, FaCalendarDay, FaCalendarWeek, 
-  FaCalendarAlt, FaSync, FaExclamationTriangle, FaExclamationCircle, FaInfo,
-  FaTasks, FaUser, FaUsers, FaClock, FaListUl, FaEdit, FaTrash, FaHourglassHalf,
-  FaCheckCircle, FaPlayCircle, FaSort, FaSortUp, FaSortDown, FaSearch,
-  FaFilter, FaUndo, FaChevronDown,
-  FaCalendar
-} from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 
 // Types
@@ -33,6 +25,8 @@ interface User {
   id: string;
   email: string;
   displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
 }
 
 type PriorityType = 'נמוכה' | 'בינונית' | 'גבוהה';
@@ -60,11 +54,52 @@ const TaskAssignment: React.FC = () => {
   const allowedStatuses = ['לביצוע', 'בתהליך', 'הושלם'];
   const allowedPriorities: PriorityType[] = ['נמוכה', 'בינונית', 'גבוהה'];
   const { currentUser } = useAuth();
+  
+  const statusOptions = [
+    { value: 'לביצוע', label: 'לביצוע', icon: <FaHourglassHalf className="text-blue-500" /> },
+    { value: 'בתהליך', label: 'בתהליך', icon: <FaPlayCircle className="text-yellow-500" /> },
+    { value: 'הושלם', label: 'הושלם', icon: <FaCheckCircle className="text-green-500" /> }
+  ];
+
+  const urgencyOptions = [
+    { value: 'גבוהה', label: 'גבוהה', icon: <FaExclamationCircle className="text-red-500" /> },
+    { value: 'בינונית', label: 'בינונית', icon: <FaExclamationTriangle className="text-yellow-500" /> },
+    { value: 'נמוכה', label: 'נמוכה', icon: <FaInfo className="text-blue-500" /> }
+  ];
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, { status: newStatus });
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    }
+  };
+
+  const handleUrgencyChange = async (taskId: string, newUrgency: string) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, { urgency: newUrgency });
+    } catch (error) {
+      console.error('Error updating task urgency:', error);
+    }
+  };
+
+  const handleAssignedUsersChange = async (taskId: string, newUsers: string[]) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      // If no users selected, assign to current user
+      const usersToAssign = newUsers.length > 0 ? newUsers : currentUser ? [currentUser.uid] : [];
+      await updateDoc(taskRef, { assignedTo: usersToAssign });
+    } catch (error) {
+      console.error('Error updating assigned users:', error);
+    }
+  };
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: '', direction: 'asc' });
   const [filters, setFilters] = useState<Filters>({
@@ -85,6 +120,22 @@ const TaskAssignment: React.FC = () => {
     repeat: '',
     urgency: 'בינוני'
   });
+
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+
+  const truncateText = (text: string, wordLimit: number) => {
+    const words = text.split(' ');
+    if (words.length > wordLimit) {
+      return words.slice(0, wordLimit).join(' ') + '...';
+    }
+    return text;
+  };
+
+  const handleReadMore = (task: Task) => {
+    setSelectedTask(task);
+    setShowTaskModal(true);
+  };
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'tasks'), (snapshot) => {
@@ -120,7 +171,10 @@ const TaskAssignment: React.FC = () => {
   };
 
   const handleUserChange = (selectedIds: string[]) => {
-    setSelectedUsers(selectedIds);
+    setNewTaskData(prev => ({
+      ...prev,
+      assignedTo: selectedIds
+    }));
   };
 
   const resetFilters = () => {
@@ -171,8 +225,6 @@ const TaskAssignment: React.FC = () => {
   const repeatableTasks = tasks.filter(task => task.repeat !== 'none');
   const urgentTasks = tasks.filter(task => task.urgency);
 
-  const [isRepeatableOpen, setIsRepeatableOpen] = useState(true);
-  const [isUrgentOpen, setIsUrgentOpen] = useState(true);
   const [isRepeatableCardsOpen, setIsRepeatableCardsOpen] = useState(true);
   const [isUrgentCardsOpen, setIsUrgentCardsOpen] = useState(true);
 
@@ -182,12 +234,78 @@ const TaskAssignment: React.FC = () => {
 
   const highUrgencyTasks = urgentTasks.filter(task => task.urgency === 'גבוהה');
   const mediumUrgencyTasks = urgentTasks.filter(task => task.urgency === 'בינוני');
-  const lowUrgencyTasks = urgentTasks.filter(task => task.urgency === 'נמוך');
+  const lowUrgencyTasks = urgentTasks.filter(task => task.urgency === 'נמוכ');
 
   console.log('All urgent tasks:', urgentTasks);
   console.log('High urgency tasks:', highUrgencyTasks);
   console.log('Medium urgency tasks:', mediumUrgencyTasks);
   console.log('Low urgency tasks:', lowUrgencyTasks);
+
+  const TaskModal = ({ task, onClose }: { task: Task; onClose: () => void }) => {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-white p-6 rounded-lg w-full max-w-2xl m-4 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-gray-800">{task.title}</h2>
+            <button 
+              onClick={onClose} 
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <FaTimes size={24} />
+            </button>
+          </div>
+          <div className="mb-6">
+            <h3 className="font-semibold text-lg mb-3 text-gray-700">תיאור:</h3>
+            <p className="whitespace-pre-wrap text-gray-600 leading-relaxed">{task.description}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg">
+            <div className="space-y-3">
+              <p className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700">סטטוס:</span>
+                <span className={`px-2 py-1 rounded-full text-sm ${
+                  task.status === 'הושלם' ? 'bg-green-100 text-green-800' :
+                  task.status === 'בתהליך' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>{task.status}</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700">עדיפות:</span>
+                <span className={`px-2 py-1 rounded-full text-sm ${
+                  task.priority === 'גבוהה' ? 'bg-red-100 text-red-800' :
+                  task.priority === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-green-100 text-green-800'
+                }`}>{task.priority}</span>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700">תאריך יעד:</span>
+                <span className="text-gray-600">{task.dueDate}</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <span className="font-semibold text-gray-700">שייך ל:</span>
+                <span className="text-gray-600">{task.assignedTo.join(', ')}</span>
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
 
   return (
     <div className="task-assignment-container p-6 max-w-7xl mx-auto" dir="rtl">
@@ -598,6 +716,7 @@ const TaskAssignment: React.FC = () => {
                 e.preventDefault();
                 addDoc(collection(db, 'tasks'), {
                   ...newTaskData,
+                  assignedTo: newTaskData.assignedTo.length > 0 ? newTaskData.assignedTo : currentUser ? [currentUser.uid] : [],
                   createdAt: Date.now(),
                 });
                 setIsModalOpen(false);
@@ -647,17 +766,17 @@ const TaskAssignment: React.FC = () => {
                             )}
                           </Listbox.Button>
                           <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                            {allowedStatuses.map(status => (
+                            {statusOptions.map(status => (
                               <Listbox.Option
-                                key={status}
-                                value={status}
+                                key={status.value}
+                                value={status.value}
                                 className={({ active }) =>
                                   `${active ? 'bg-red-50 text-red-900' : 'text-gray-900'}
                                    cursor-pointer select-none relative py-2 px-4 flex items-center gap-2`
                                 }
                               >
-                                {status === 'הושלם' ? <FaCheckCircle className="text-green-500" /> : null}
-                                {status}
+                                {status.icon}
+                                {status.label}
                               </Listbox.Option>
                             ))}
                           </Listbox.Options>
@@ -701,15 +820,25 @@ const TaskAssignment: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                        <FaClock /> תאריך יעד
+                        <FaClock className="text-blue-500" />
+                        תאריך יעד
                       </label>
-                      <input
-                        type="date"
-                        name="dueDate"
-                        value={newTaskData.dueDate || ''}
-                        onChange={(e) => setNewTaskData(prev => ({ ...prev, dueDate: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
-                      />
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <FaCalendarAlt className="text-red-500" />
+                        </div>
+                        <input
+                          type="date"
+                          className="block w-full pr-10 border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-right"
+                          value={newTaskData.dueDate ? newTaskData.dueDate.toString().split('T')[0] : ''}
+                          onChange={(e) => {
+                            const date = new Date(e.target.value);
+                            date.setHours(0, 0, 0, 0);
+                            setNewTaskData(prev => ({ ...prev, dueDate: date }));
+                          }}
+                          required
+                        />
+                      </div>
                     </div>
                     <div className="relative">
                       <Listbox
@@ -764,30 +893,104 @@ const TaskAssignment: React.FC = () => {
                             )}
                           </Listbox.Button>
                           <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                            {['גבוהה', 'בינוני', 'נמוך'].map(urgency => (
+                            {urgencyOptions.map(urgency => (
                               <Listbox.Option
-                                key={urgency}
-                                value={urgency}
+                                key={urgency.value}
+                                value={urgency.value}
                                 className={({ active }) =>
                                   `${active ? 'bg-red-50 text-red-900' : 'text-gray-900'}
                                    cursor-pointer select-none relative py-2 px-4 flex items-center gap-2`
                                 }
                               >
-                                {({ selected }) => (
-                                  <>
-                                    {urgency === 'גבוהה' ? <FaExclamationCircle className="text-red-500" /> :
-                                     urgency === 'בינוני' ? <FaExclamationTriangle className="text-orange-500" /> :
-                                     <FaInfo className="text-yellow-500" />}
-                                    {urgency}
-                                    {selected && <FaCheck className="ml-auto" />}
-                                  </>
-                                )}
+                                {urgency.icon}
+                                {urgency.label}
                               </Listbox.Option>
                             ))}
                           </Listbox.Options>
                         </div>
                       </Listbox>
                     </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      שייך ל
+                    </label>
+                    <Listbox
+                      value={newTaskData.assignedTo.length > 0 ? newTaskData.assignedTo : currentUser ? [currentUser.uid] : []}
+                      onChange={handleUserChange}
+                      multiple
+                    >
+                      <div className="relative mt-1">
+                        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                          <span className="block truncate">
+                            {(newTaskData.assignedTo.length > 0 ? newTaskData.assignedTo : currentUser ? [currentUser.uid] : []).map(userId => {
+                              const user = users.find(u => u.id === userId);
+                              return user ? (
+                                <span
+                                  key={userId}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                                >
+                                  <FaUser className="text-red-500" />
+                                  <span className="truncate max-w-[150px]">
+                                    {user.firstName && user.lastName 
+                                      ? `${user.firstName} ${user.lastName}`
+                                      : user.displayName || user.email}
+                                  </span>
+                                </span>
+                              ) : null;
+                            })}
+                          </span>
+                          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                            <FaChevronDown
+                              className="h-4 w-4 text-gray-400"
+                              aria-hidden="true"
+                            />
+                          </span>
+                        </Listbox.Button>
+                        <Transition
+                          as={Fragment}
+                          leave="transition ease-in duration-100"
+                          leaveFrom="opacity-100"
+                          leaveTo="opacity-0"
+                        >
+                          <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                            {users.map((user) => (
+                              <Listbox.Option
+                                key={user.id}
+                                className={({ active }) =>
+                                  `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                    active ? 'bg-red-50 text-red-900' : 'text-gray-900'
+                                  }`
+                                }
+                                value={user.id}
+                              >
+                                {({ selected, active }) => (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <FaUser className={`${selected ? 'text-red-500' : 'text-gray-400'} w-4 h-4`} />
+                                      <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                        {user.firstName && user.lastName 
+                                          ? `${user.firstName} ${user.lastName}`
+                                          : user.displayName || user.email}
+                                      </span>
+                                    </div>
+                                    {selected && (
+                                      <span
+                                        className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                          active ? 'text-red-600' : 'text-red-600'
+                                        }`}
+                                      >
+                                        <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </Listbox.Option>
+                            ))}
+                          </Listbox.Options>
+                        </Transition>
+                      </div>
+                    </Listbox>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -816,7 +1019,6 @@ const TaskAssignment: React.FC = () => {
       </AnimatePresence>
 
 
-      
         
         <AnimatePresence>
           {selectedTaskId && (
@@ -830,7 +1032,7 @@ const TaskAssignment: React.FC = () => {
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 50, opacity: 0 }}
-                className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+                className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden"
               >
                 <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex justify-between items-center">
                   <div className="flex items-center gap-2">
@@ -857,27 +1059,40 @@ const TaskAssignment: React.FC = () => {
                         }}
                       >
                         <div className="relative">
-                          <Listbox.Button className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-left focus:ring-2 focus:ring-red-500 focus:border-transparent transition">
-                            {({ value }) => (
-                              <span className="flex items-center gap-2">
-                                {value === 'גבוהה' ? <FaExclamationTriangle className="text-red-500" /> : null}
-                                {value || 'בחר דחיפות'}
-                                <FaChevronDown className="ml-auto h-4 w-4" />
-                              </span>
-                            )}
+                          <Listbox.Button className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium w-full justify-between ${
+                            tasks.find(t => t.id === selectedTaskId)?.priority === 'גבוהה' ? 'bg-red-100 text-red-800' :
+                            tasks.find(t => t.id === selectedTaskId)?.priority === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            <span className="flex items-center gap-2">
+                              {tasks.find(t => t.id === selectedTaskId)?.priority === 'גבוהה' ? <FaExclamationTriangle className="text-red-500" /> : null}
+                              {tasks.find(t => t.id === selectedTaskId)?.priority || 'בחר דחיפות'}
+                              <FaChevronDown className="ml-2 h-4 w-4" />
+                            </span>
                           </Listbox.Button>
-                          <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                          <Listbox.Options className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none text-sm">
                             {allowedPriorities.map(priority => (
                               <Listbox.Option
                                 key={priority}
                                 value={priority}
                                 className={({ active }) =>
-                                  `${active ? 'bg-red-50 text-red-900' : 'text-gray-900'}
-                                   cursor-pointer select-none relative py-2 px-4 flex items-center gap-2`
+                                  `${active ? 'text-white bg-red-600' : 'text-gray-900'}
+                                   cursor-pointer select-none relative py-2 pl-3 pr-9`
                                 }
                               >
-                                {priority === 'גבוהה' ? <FaExclamationTriangle className="text-red-500" /> : null}
-                                {priority}
+                                {({ selected, active }) => (
+                                  <div className="flex items-center gap-2">
+                                    {priority === 'גבוהה' ? <FaExclamationTriangle className="text-red-500" /> : null}
+                                    <span className={`${selected ? 'font-semibold' : 'font-normal'} block truncate`}>
+                                      {priority}
+                                    </span>
+                                    {selected && (
+                                      <span className={`${active ? 'text-white' : 'text-red-600'} absolute left-0 flex items-center pl-4`}>
+                                        <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </Listbox.Option>
                             ))}
                           </Listbox.Options>
@@ -1011,10 +1226,10 @@ const TaskAssignment: React.FC = () => {
                         </span>
                       </Listbox.Button>
                       <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                        {allowedStatuses.map(status => (
+                        {statusOptions.map(status => (
                           <Listbox.Option
-                            key={status}
-                            value={status}
+                            key={status.value}
+                            value={status.value}
                             className={({ active, selected }) =>
                               `${active ? 'bg-red-50 text-red-900' : 'text-gray-900'}
                                ${selected ? 'bg-red-100' : ''}
@@ -1023,14 +1238,8 @@ const TaskAssignment: React.FC = () => {
                           >
                             {({ selected }) => (
                               <>
-                                {status === 'הושלם' ? (
-                                  <FaCheckCircle className="text-green-500" />
-                                ) : status === 'בתהליך' ? (
-                                  <FaPlayCircle className="text-yellow-500" />
-                                ) : (
-                                  <FaHourglassHalf className="text-blue-500" />
-                                )}
-                                {status}
+                                {status.icon}
+                                {status.label}
                                 {selected && <FaCheck className="ml-auto" />}
                               </>
                             )}
@@ -1045,7 +1254,7 @@ const TaskAssignment: React.FC = () => {
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                     <FaUsers className="text-blue-500" />
-                    משתמשים
+                    שייך ל
                   </label>
                   <Listbox
                     value={selectedUsers}
@@ -1076,7 +1285,9 @@ const TaskAssignment: React.FC = () => {
                             {({ selected }) => (
                               <>
                                 <FaUser className="text-blue-500" />
-                                {user.displayName || user.email}
+                                {user.firstName && user.lastName 
+                                  ? `${user.firstName} ${user.lastName}`
+                                  : user.displayName || user.email}
                                 {selected && <FaCheck className="ml-auto" />}
                               </>
                             )}
@@ -1188,151 +1399,265 @@ const TaskAssignment: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'title', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
+                  <th scope="col" className="w-48 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'title', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     <div className="flex items-center gap-2">
                       <span>כותרת</span>
                       {sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
                     </div>
                   </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'description', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                    <div className="flex items-center gap-2">
-                      <span>תיאור</span>
-                      {sortConfig.key === 'description' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
-                    </div>
+                  <th scope="col" className="w-64 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    תיאור
                   </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'status', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                    <div className="flex items-center gap-2">
-                      <span>סטטוס</span>
-                      {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
-                    </div>
+                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    סטטוס
                   </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'priority', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
-                    <div className="flex items-center gap-2">
-                      <span>דחיפות</span>
-                      {sortConfig.key === 'priority' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
-                    </div>
+                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    דחיפות
                   </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'dueDate', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
+                  <th scope="col" className="w-40 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    שייך ל
+                  </th>
+                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'dueDate', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     <div className="flex items-center gap-2">
                       <span>תאריך יעד</span>
                       {sortConfig.key === 'dueDate' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
                     </div>
                   </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    משתמשים
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    פעולות
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedTasks.map(task => (
-                  <tr key={task.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">{task.title}</td>
-                    <td className="px-6 py-4">{task.description}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        task.status === 'הושלם' ? 'bg-green-100 text-green-800' :
-                        task.status === 'בתהליך' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}>
-                        {task.status === 'הושלם' ? (
-                          <><FaCheckCircle className="mr-1" /> {task.status}</>
-                        ) : task.status === 'בתהליך' ? (
-                          <><FaPlayCircle className="mr-1" /> {task.status}</>
-                        ) : (
-                          <><FaHourglassHalf className="mr-1" /> {task.status}</>
-                        )}
+                  <tr 
+                    key={task.id} 
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      if (
+                        e.target === e.currentTarget ||
+                        (e.target as HTMLElement).closest('td')?.cellIndex === 1
+                      ) {
+                        handleReadMore(task);
+                      }
+                    }}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap max-w-[12rem]">
+                      <span className="text-sm font-medium text-gray-900 truncate block" title={task.title}>
+                        {task.title}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="relative">
-                        <Listbox
-                          value={task.priority}
-                          onChange={(value) => {
-                            const taskDocRef = doc(db, 'tasks', task.id);
-                            updateDoc(taskDocRef, { priority: value });
-                          }}
-                        >
-                          <div className="relative">
-                            <Listbox.Button className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-left focus:ring-2 focus:ring-red-500 focus:border-transparent transition">
-                              {({ value }) => (
-                                <span className="flex items-center gap-2">
-                                  {value === 'גבוהה' ? (
-                                    <FaExclamationTriangle className="text-red-500" />
-                                  ) : value === 'בינונית' ? (
-                                    <FaExclamationCircle className="text-yellow-500" />
-                                  ) : (
-                                    <FaInfo className="text-green-500" />
-                                  )}
-                                  {value || 'בחר דחיפות'}
-                                  <FaChevronDown className="ml-auto h-4 w-4" />
-                                </span>
-                              )}
-                            </Listbox.Button>
-                            <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                              {allowedPriorities.map(priority => (
+                      <div className="text-sm text-gray-900 line-clamp-2">
+                        {truncateText(task.description, 5)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <Listbox
+                        value={task.status}
+                        onChange={(value) => handleStatusChange(task.id, value)}
+                      >
+                        <div className="relative">
+                          <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                              task.status === 'הושלם' ? 'bg-green-100 text-green-800' :
+                              task.status === 'בתהליך' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {statusOptions.find(option => option.value === task.status)?.icon}
+                              <span className="mr-1.5">{task.status}</span>
+                            </div>
+                          </Listbox.Button>
+                          <Transition
+                            as={Fragment}
+                            leave="transition ease-in duration-100"
+                            leaveFrom="opacity-100"
+                            leaveTo="opacity-0"
+                          >
+                            <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                              {statusOptions.map((option) => (
                                 <Listbox.Option
-                                  key={priority}
-                                  value={priority}
+                                  key={option.value}
                                   className={({ active }) =>
-                                    `${active ? 'bg-red-50 text-red-900' : 'text-gray-900'}
-                                     cursor-pointer select-none relative py-2 px-4 flex items-center gap-2`
+                                    `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                      active ? 'bg-red-100 text-red-900' : 'text-gray-900'
+                                    }`
                                   }
+                                  value={option.value}
                                 >
-                                  {priority === 'גבוהה' ? (
-                                    <FaExclamationTriangle className="text-red-500" />
-                                  ) : priority === 'בינונית' ? (
-                                    <FaExclamationCircle className="text-yellow-500" />
-                                  ) : (
-                                    <FaInfo className="text-green-500" />
+                                  {({ selected, active }) => (
+                                    <>
+                                      <div className="flex items-center gap-2">
+                                        {option.icon}
+                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                          {option.value}
+                                        </span>
+                                      </div>
+                                      {selected && (
+                                        <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                          active ? 'text-red-600' : 'text-red-600'
+                                        }`}>
+                                          <FaCheck className="h-5 w-5" aria-hidden="true" />
+                                        </span>
+                                      )}
+                                    </>
                                   )}
-                                  {priority}
                                 </Listbox.Option>
                               ))}
                             </Listbox.Options>
-                          </div>
-                        </Listbox>
-                      </div>
+                          </Transition>
+                        </div>
+                      </Listbox>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {new Date(task.dueDate).toLocaleDateString('he-IL')}
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <Listbox
+                        value={task.urgency || 'בינונית'}
+                        onChange={(value) => handleUrgencyChange(task.id, value)}
+                      >
+                        <div className="relative">
+                          <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                              task.urgency === 'גבוהה' ? 'bg-red-100 text-red-800' :
+                              task.urgency === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {urgencyOptions.find(option => option.value === task.urgency)?.icon}
+                              <span className="mr-1.5">{task.urgency || 'בינונית'}</span>
+                            </div>
+                          </Listbox.Button>
+                          <Transition
+                            as={Fragment}
+                            leave="transition ease-in duration-100"
+                            leaveFrom="opacity-100"
+                            leaveTo="opacity-0"
+                          >
+                            <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                              {urgencyOptions.map((option) => (
+                                <Listbox.Option
+                                  key={option.value}
+                                  className={({ active }) =>
+                                    `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                      active ? 'bg-red-100 text-red-900' : 'text-gray-900'
+                                    }`
+                                  }
+                                  value={option.value}
+                                >
+                                  {({ selected, active }) => (
+                                    <>
+                                      <div className="flex items-center gap-2">
+                                        {option.icon}
+                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                          {option.value}
+                                        </span>
+                                      </div>
+                                      {selected && (
+                                        <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                          active ? 'text-red-600' : 'text-red-600'
+                                        }`}>
+                                          <FaCheck className="h-5 w-5" aria-hidden="true" />
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </Listbox.Option>
+                              ))}
+                            </Listbox.Options>
+                          </Transition>
+                        </div>
+                      </Listbox>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-2">
-                        {task.assignedTo.map(userId => {
-                          const user = users.find(u => u.id === userId);
-                          return user ? (
-                            <span key={userId} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full text-sm">
-                              <FaUser className="text-blue-500" />
-                              {user.displayName || user.email}
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <Listbox
+                        value={task.assignedTo}
+                        onChange={(value) => handleAssignedUsersChange(task.id, value)}
+                        multiple
+                      >
+                        <div className="relative">
+                          <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                            <span className="block truncate">
+                              {task.assignedTo.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 justify-end">
+                                  {task.assignedTo.map(userId => {
+                                    const user = users.find(u => u.id === userId);
+                                    return user ? (
+                                      <span
+                                        key={userId}
+                                        className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                                      >
+                                        <FaUser className="text-red-500 w-3 h-3" />
+                                        <span className="truncate max-w-[100px]">
+                                          {user.firstName && user.lastName 
+                                            ? `${user.firstName} ${user.lastName}`
+                                            : user.displayName || user.email}
+                                          {userId === currentUser?.uid && " (אני)"}
+                                        </span>
+                                      </span>
+                                    ) : null;
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">בחר משתמשים</span>
+                              )}
                             </span>
-                          ) : null;
-                        })}
-                      </div>
+                            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                              <FaChevronDown
+                                className="h-5 w-5 text-gray-400"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </Listbox.Button>
+                          <Transition
+                            as={Fragment}
+                            leave="transition ease-in duration-100"
+                            leaveFrom="opacity-100"
+                            leaveTo="opacity-0"
+                          >
+                            <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                              {users.map((user) => (
+                                <Listbox.Option
+                                  key={user.id}
+                                  className={({ active }) =>
+                                    `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                      active ? 'bg-red-50 text-red-900' : 'text-gray-900'
+                                    }`
+                                  }
+                                  value={user.id}
+                                >
+                                  {({ selected, active }) => (
+                                    <>
+                                      <div className="flex items-center gap-2 justify-end">
+                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                          {user.firstName && user.lastName 
+                                            ? `${user.firstName} ${user.lastName}`
+                                            : user.displayName || user.email}
+                                        </span>
+                                        <FaUser className={`${selected ? 'text-red-500' : 'text-gray-400'} w-4 h-4`} />
+                                      </div>
+                                      {selected && (
+                                        <span
+                                          className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                            active ? 'text-red-600' : 'text-red-600'
+                                          }`}
+                                        >
+                                          <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </Listbox.Option>
+                              ))}
+                            </Listbox.Options>
+                          </Transition>
+                        </div>
+                      </Listbox>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                          onClick={() => setSelectedTaskId(task.id)}
-                        >
-                          <FaEdit className="w-5 h-5" />
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                          onClick={() => {
-                            const taskDocRef = doc(db, 'tasks', task.id);
-                            deleteDoc(taskDocRef);
-                          }}
-                        >
-                          <FaTrash className="w-5 h-5" />
-                        </motion.button>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 justify-end">
+                        <span className="font-medium">
+                          {new Date(task.dueDate).toLocaleDateString('he-IL', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                          })}
+                        </span>
+                        <FaCalendarAlt className="text-red-500" />
                       </div>
                     </td>
                   </tr>
@@ -1342,9 +1667,354 @@ const TaskAssignment: React.FC = () => {
           </div>
         </div>
 
-       
-  
-      </div>
+      {showTaskModal && selectedTask && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedTask(null)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  onClick={() => setSelectedTask(null)}
+                >
+                  <FaTimes className="w-5 h-5" />
+                </motion.button>
+                <h2 className="text-2xl font-bold text-gray-900 text-right">{selectedTask.title}</h2>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2 text-right">כותרת</h3>
+                  <input
+                    type="text"
+                    value={selectedTask.title}
+                    onChange={(e) => {
+                      const taskRef = doc(db, 'tasks', selectedTask.id);
+                      updateDoc(taskRef, { title: e.target.value });
+                      setSelectedTask({ ...selectedTask, title: e.target.value });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-right"
+                  />
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2 text-right">תיאור המשימה</h3>
+                  <textarea
+                    value={selectedTask.description}
+                    onChange={(e) => {
+                      const taskRef = doc(db, 'tasks', selectedTask.id);
+                      updateDoc(taskRef, { description: e.target.value });
+                      setSelectedTask({ ...selectedTask, description: e.target.value });
+                    }}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-right resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 text-right">סטטוס</h3>
+                    <Listbox
+                      value={selectedTask.status}
+                      onChange={(value) => {
+                        const taskRef = doc(db, 'tasks', selectedTask.id);
+                        updateDoc(taskRef, { status: value });
+                        setSelectedTask({ ...selectedTask, status: value });
+                      }}
+                    >
+                      <div className="relative">
+                        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                            selectedTask.status === 'הושלם' ? 'bg-green-100 text-green-800' :
+                            selectedTask.status === 'בתהליך' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {statusOptions.find(option => option.value === selectedTask.status)?.icon}
+                            <span className="mr-2">{selectedTask.status}</span>
+                          </div>
+                        </Listbox.Button>
+                        <Transition
+                          as={Fragment}
+                          leave="transition ease-in duration-100"
+                          leaveFrom="opacity-100"
+                          leaveTo="opacity-0"
+                        >
+                          <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                            {statusOptions.map((option) => (
+                              <Listbox.Option
+                                key={option.value}
+                                className={({ active }) =>
+                                  `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                    active ? 'bg-red-100 text-red-900' : 'text-gray-900'
+                                  }`
+                                }
+                                value={option.value}
+                              >
+                                {({ selected, active }) => (
+                                  <>
+                                    <div className="flex items-center gap-2 justify-end">
+                                      {option.icon}
+                                      <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                        {option.value}
+                                      </span>
+                                    </div>
+                                    {selected && (
+                                      <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-red-600' : 'text-red-600'
+                                      }`}>
+                                        <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </Listbox.Option>
+                            ))}
+                          </Listbox.Options>
+                        </Transition>
+                      </div>
+                    </Listbox>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2 text-right">דחיפות</h3>
+                    <Listbox
+                      value={selectedTask.urgency || 'בינונית'}
+                      onChange={(value) => {
+                        const taskRef = doc(db, 'tasks', selectedTask.id);
+                        updateDoc(taskRef, { urgency: value });
+                        setSelectedTask({ ...selectedTask, urgency: value });
+                      }}
+                    >
+                      <div className="relative">
+                        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                            selectedTask.urgency === 'גבוהה' ? 'bg-red-100 text-red-800' :
+                            selectedTask.urgency === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {urgencyOptions.find(option => option.value === selectedTask.urgency)?.icon}
+                            <span className="mr-2">{selectedTask.urgency || 'בינונית'}</span>
+                          </div>
+                        </Listbox.Button>
+                        <Transition
+                          as={Fragment}
+                          leave="transition ease-in duration-100"
+                          leaveFrom="opacity-100"
+                          leaveTo="opacity-0"
+                        >
+                          <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                            {urgencyOptions.map((option) => (
+                              <Listbox.Option
+                                key={option.value}
+                                className={({ active }) =>
+                                  `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                    active ? 'bg-red-100 text-red-900' : 'text-gray-900'
+                                  }`
+                                }
+                                value={option.value}
+                              >
+                                {({ selected, active }) => (
+                                  <>
+                                    <div className="flex items-center gap-2 justify-end">
+                                      {option.icon}
+                                      <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                        {option.value}
+                                      </span>
+                                    </div>
+                                    {selected && (
+                                      <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-red-600' : 'text-red-600'
+                                      }`}>
+                                        <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </Listbox.Option>
+                            ))}
+                          </Listbox.Options>
+                        </Transition>
+                      </div>
+                    </Listbox>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2 text-right">שייך ל</h3>
+                  <Listbox
+                    value={selectedTask.assignedTo}
+                    onChange={(value) => {
+                      const taskRef = doc(db, 'tasks', selectedTask.id);
+                      updateDoc(taskRef, { assignedTo: value });
+                      setSelectedTask({ ...selectedTask, assignedTo: value });
+                    }}
+                    multiple
+                  >
+                    <div className="relative">
+                      <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <span className="block truncate">
+                          {selectedTask.assignedTo.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 justify-end">
+                              {selectedTask.assignedTo.map(userId => {
+                                const user = users.find(u => u.id === userId);
+                                return user ? (
+                                  <span
+                                    key={userId}
+                                    className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
+                                  >
+                                    <FaUser className="text-red-500 w-3 h-3" />
+                                    <span className="truncate max-w-[100px]">
+                                      {user.firstName && user.lastName 
+                                        ? `${user.firstName} ${user.lastName}`
+                                        : user.displayName || user.email}
+                                      {userId === currentUser?.uid && " (אני)"}
+                                    </span>
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">בחר משתמשים</span>
+                          )}
+                        </span>
+                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                          <FaChevronDown
+                            className="h-5 w-5 text-gray-400"
+                            aria-hidden="true"
+                          />
+                        </span>
+                      </Listbox.Button>
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-100"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                          {users.map((user) => (
+                            <Listbox.Option
+                              key={user.id}
+                              className={({ active }) =>
+                                `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                  active ? 'bg-red-50 text-red-900' : 'text-gray-900'
+                                }`
+                              }
+                              value={user.id}
+                            >
+                              {({ selected, active }) => (
+                                <>
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                      {user.firstName && user.lastName 
+                                        ? `${user.firstName} ${user.lastName}`
+                                        : user.displayName || user.email}
+                                    </span>
+                                    <FaUser className={`${selected ? 'text-red-500' : 'text-gray-400'} w-4 h-4`} />
+                                  </div>
+                                  {selected && (
+                                    <span
+                                      className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-red-600' : 'text-red-600'
+                                      }`}
+                                    >
+                                      <FaCheck className="h-4 w-4" aria-hidden="true" />
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2 text-right">תאריך יעד</h3>
+                  <input
+                    type="date"
+                    value={new Date(selectedTask.dueDate).toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const taskRef = doc(db, 'tasks', selectedTask.id);
+                      updateDoc(taskRef, { dueDate: new Date(e.target.value).toISOString() });
+                      setSelectedTask({ ...selectedTask, dueDate: new Date(e.target.value).toISOString() });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-right"
+                  />
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  onClick={async () => {
+                    if (window.confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) {
+                      try {
+                        await deleteDoc(doc(db, 'tasks', selectedTask.id));
+                        setSelectedTask(null);
+                      } catch (error) {
+                        console.error('Error deleting task:', error);
+                      }
+                    }
+                  }}
+                >
+                  <FaTrash className="ml-2 -mr-1 h-4 w-4" />
+                  מחק משימה
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  onClick={async () => {
+                    try {
+                      const taskRef = doc(db, 'tasks', selectedTask.id);
+                      await updateDoc(taskRef, {
+                        title: selectedTask.title,
+                        description: selectedTask.description,
+                        status: selectedTask.status,
+                        urgency: selectedTask.urgency,
+                        assignedTo: selectedTask.assignedTo,
+                        dueDate: selectedTask.dueDate,
+                        updatedAt: new Date().toISOString()
+                      });
+                      setSelectedTask(null);
+                    } catch (error) {
+                      console.error('Error saving task:', error);
+                    }
+                  }}
+                >
+                  <FaSave className="ml-2 -mr-1 h-4 w-4" />
+                  שמור שינויים
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  onClick={() => setSelectedTask(null)}
+                >
+                  ביטול
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </div>
   );
 };
 

@@ -1,6 +1,5 @@
 import { getDatabase, ref, get, remove } from 'firebase/database';
-import { getFirestore, collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import firebase from '../services/firebase';
+import { getFirestore, doc, setDoc} from 'firebase/firestore';
 
 interface DataToMigrate {
   leads: any[];

@@ -17,7 +17,7 @@ import {
   Search as SearchIcon,
   Add as AddIcon,
 } from '@mui/icons-material';
-import { useChat, Chat } from '../../contexts/ChatContext';
+import { useChat } from '../../contexts/ChatContext';
 import { formatDistanceToNow } from 'date-fns';
 import { he } from 'date-fns/locale';
 

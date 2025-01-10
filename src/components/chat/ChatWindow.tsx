@@ -6,7 +6,7 @@ import {
   TextField,
   IconButton,
   Avatar,
-  Divider,
+  
 } from '@mui/material';
 import {
   Send as SendIcon,

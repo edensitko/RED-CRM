@@ -38,7 +38,7 @@ const navigation = [
   { name: 'לידים', href: '/leads', icon: LeadsIcon },
   { name: 'מכירות', href: '/sales', icon: SalesIcon },
   { name: 'תמיכה', href: '/support', icon: SupportIcon },
-  { name: 'example', href: '/example', icon: SupportIcon },
+  // { name: 'example', href: '/example', icon: SupportIcon },
   { name: 'תהליכי עבודה', href: '/workflows', icon: WorkflowIcon },
   { name: 'רעיונות', href: '/ideas', icon: EmojiObjectsIcon },
   { name: 'צ׳אט', href: '/chat', icon: ChatIcon },

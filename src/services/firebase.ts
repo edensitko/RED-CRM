@@ -9,7 +9,6 @@ import {
   User,
 } from 'firebase/auth';
 import { 
-  collection, 
   doc, 
   setDoc, 
   getDoc, 

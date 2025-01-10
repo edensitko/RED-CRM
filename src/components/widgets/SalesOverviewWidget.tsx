@@ -1,14 +1,6 @@
 import React from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  CircularProgress,
-  Alert,
-  Stack,
-} from '@mui/material';
+import {Box,Typography, CircularProgress,Alert,} from '@mui/material';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { WidgetProps } from './WidgetTypes';
 
 interface SalesOverviewWidgetProps {
   data?: {
@@ -45,8 +37,7 @@ const SalesOverviewWidget: React.FC<SalesOverviewWidgetProps> = ({
   data,
   loading = false,
   error = null,
-  onRefresh,
-  settings,
+
   preview = false,
 }) => {
   const chartData = preview ? previewData : (data?.sales || defaultData);

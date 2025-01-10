@@ -34,18 +34,18 @@ export default function Signup() {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!validateForm()) return;
 
+    setError('');
+    setLoading(true);
     try {
-      setError('');
-      setLoading(true);
-      await signUp(email, password);
+      await signUp(email, password, name);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : auth.signUpError);
+      setError(err instanceof Error ? err.message : 'Failed to create an account');
     } finally {
       setLoading(false);
     }

@@ -12,15 +12,7 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
+
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { FaProjectDiagram, FaTimes } from 'react-icons/fa';

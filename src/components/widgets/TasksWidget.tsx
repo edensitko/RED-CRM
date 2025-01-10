@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, Box, List, ListItem, ListItemText, Divider, Chip, CircularProgress, ListItemIcon } from '@mui/material';
+import {  Typography, Box, List, ListItem, ListItemText, Divider, Chip, CircularProgress, ListItemIcon } from '@mui/material';
 import { Assignment as TaskIcon, CheckCircle as CompletedIcon, Schedule as PendingIcon } from '@mui/icons-material';
 import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { db } from '../../config/firebase';
