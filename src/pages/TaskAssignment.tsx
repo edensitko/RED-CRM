@@ -64,7 +64,7 @@ const TaskAssignment: React.FC = () => {
   const urgencyOptions = [
     { value: 'גבוהה', label: 'גבוהה', icon: <FaExclamationCircle className="text-red-500" /> },
     { value: 'בינונית', label: 'בינונית', icon: <FaExclamationTriangle className="text-yellow-500" /> },
-    { value: 'נמוכה', label: 'נמוכה', icon: <FaInfo className="text-blue-500" /> }
+    { value: 'נמוכ', label: 'נמוכ', icon: <FaInfo className="text-blue-500" /> }
   ];
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
@@ -101,6 +101,8 @@ const TaskAssignment: React.FC = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: '', direction: 'asc' });
   const [filters, setFilters] = useState<Filters>({
     priority: [],
@@ -120,9 +122,6 @@ const TaskAssignment: React.FC = () => {
     repeat: '',
     urgency: 'בינוני'
   });
-
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [showTaskModal, setShowTaskModal] = useState(false);
 
   const truncateText = (text: string, wordLimit: number) => {
     const words = text.split(' ');
@@ -162,6 +161,12 @@ const TaskAssignment: React.FC = () => {
 
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (selectedTask) {
+      setShowTaskModal(true);
+    }
+  }, [selectedTask]);
 
   const handleFilterChange = (key: keyof Filters, value: any) => {
     setFilters(prev => ({
@@ -233,7 +238,7 @@ const TaskAssignment: React.FC = () => {
   const monthlyTasks = repeatableTasks.filter(task => task.repeat === 'monthly');
 
   const highUrgencyTasks = urgentTasks.filter(task => task.urgency === 'גבוהה');
-  const mediumUrgencyTasks = urgentTasks.filter(task => task.urgency === 'בינוני');
+  const mediumUrgencyTasks = urgentTasks.filter(task => task.urgency === 'בינונית');
   const lowUrgencyTasks = urgentTasks.filter(task => task.urgency === 'נמוכ');
 
   console.log('All urgent tasks:', urgentTasks);
@@ -846,14 +851,12 @@ const TaskAssignment: React.FC = () => {
                         onChange={(value) => setNewTaskData(prev => ({ ...prev, repeat: value }))}
                       >
                         <div className="relative">
-                          <Listbox.Button className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-left focus:ring-2 focus:ring-red-500 focus:border-transparent transition">
-                            {({ value }) => (
-                              <span className="flex items-center gap-2">
-                                {value === 'daily' ? <FaCalendarDay className="text-blue-500" /> : null}
-                                {value || 'בחר חזרה'}
-                                <FaChevronDown className="ml-auto h-4 w-4" />
-                              </span>
-                            )}
+                          <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                            <div className="flex items-center gap-2">
+                              {newTaskData.repeat === 'daily' ? <FaCalendarDay className="text-blue-500" /> : null}
+                              {newTaskData.repeat || 'בחר חזרה'}
+                              <FaChevronDown className="ml-auto h-4 w-4" />
+                            </div>
                           </Listbox.Button>
                           <Listbox.Options className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
                             {['none', 'daily', 'weekly', 'monthly'].map(repeat => (
@@ -958,7 +961,7 @@ const TaskAssignment: React.FC = () => {
                               <Listbox.Option
                                 key={user.id}
                                 className={({ active }) =>
-                                  `relative cursor-pointer select-none py-2 pl-10 pr-4 ${
+                                  `relative cursor-pointer select-none py-2 pl-3 pr-9 ${
                                     active ? 'bg-red-50 text-red-900' : 'text-gray-900'
                                   }`
                                 }
@@ -1042,7 +1045,10 @@ const TaskAssignment: React.FC = () => {
                   <motion.button
                     whileHover={{ rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => setSelectedTaskId('')}
+                    onClick={() => {
+                      setSelectedTaskId('');
+                      setSelectedTask(null);
+                    }}
                     className="text-white hover:bg-white/20 rounded-full p-2 transition"
                   >
                     <FaTimes className="w-6 h-6" />
@@ -1059,16 +1065,16 @@ const TaskAssignment: React.FC = () => {
                         }}
                       >
                         <div className="relative">
-                          <Listbox.Button className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium w-full justify-between ${
-                            tasks.find(t => t.id === selectedTaskId)?.priority === 'גבוהה' ? 'bg-red-100 text-red-800' :
-                            tasks.find(t => t.id === selectedTaskId)?.priority === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            <span className="flex items-center gap-2">
+                          <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-right border focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                              tasks.find(t => t.id === selectedTaskId)?.priority === 'גבוהה' ? 'bg-red-100 text-red-800' :
+                              tasks.find(t => t.id === selectedTaskId)?.priority === 'בינונית' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
                               {tasks.find(t => t.id === selectedTaskId)?.priority === 'גבוהה' ? <FaExclamationTriangle className="text-red-500" /> : null}
                               {tasks.find(t => t.id === selectedTaskId)?.priority || 'בחר דחיפות'}
                               <FaChevronDown className="ml-2 h-4 w-4" />
-                            </span>
+                            </div>
                           </Listbox.Button>
                           <Listbox.Options className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none text-sm">
                             {allowedPriorities.map(priority => (
@@ -1077,7 +1083,7 @@ const TaskAssignment: React.FC = () => {
                                 value={priority}
                                 className={({ active }) =>
                                   `${active ? 'text-white bg-red-600' : 'text-gray-900'}
-                                   cursor-pointer select-none relative py-2 pl-3 pr-9`
+                                   cursor-pointer select-none relative py-2 px-4 flex items-center gap-2`
                                 }
                               >
                                 {({ selected, active }) => (
@@ -1087,7 +1093,9 @@ const TaskAssignment: React.FC = () => {
                                       {priority}
                                     </span>
                                     {selected && (
-                                      <span className={`${active ? 'text-white' : 'text-red-600'} absolute left-0 flex items-center pl-4`}>
+                                      <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-red-600' : 'text-red-600'
+                                      }`}>
                                         <FaCheck className="h-4 w-4" aria-hidden="true" />
                                       </span>
                                     )}
@@ -1399,25 +1407,30 @@ const TaskAssignment: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="w-48 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'title', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <span>פתח</span>
+                    </div>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'title', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     <div className="flex items-center gap-2">
                       <span>כותרת</span>
                       {sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
                     </div>
                   </th>
-                  <th scope="col" className="w-64 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     תיאור
                   </th>
-                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     סטטוס
                   </th>
-                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     דחיפות
                   </th>
-                  <th scope="col" className="w-40 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     שייך ל
                   </th>
-                  <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'dueDate', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => setSortConfig({ key: 'dueDate', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>
                     <div className="flex items-center gap-2">
                       <span>תאריך יעד</span>
                       {sortConfig.key === 'dueDate' ? (sortConfig.direction === 'asc' ? <FaSortUp className="text-red-500" /> : <FaSortDown className="text-red-500" />) : <FaSort className="text-gray-400" />}
@@ -1429,20 +1442,32 @@ const TaskAssignment: React.FC = () => {
                 {sortedTasks.map(task => (
                   <tr 
                     key={task.id} 
-                    className="hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={(e) => {
-                      if (
-                        e.target === e.currentTarget ||
-                        (e.target as HTMLElement).closest('td')?.cellIndex === 1
-                      ) {
-                        handleReadMore(task);
+                      const isButton = e.target instanceof HTMLButtonElement || 
+                                     e.target instanceof SVGElement ||
+                                     (e.target as HTMLElement).closest('button');
+                      if (!isButton) {
+                        setSelectedTask(task);
                       }
                     }}
+                    className="hover:bg-gray-50 cursor-pointer"
                   >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTask(task);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                        title="פתח פרטי משימה"
+                      >
+                        <FaListUl className="text-xl" />
+                      </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap max-w-[12rem]">
-                      <span className="text-sm font-medium text-gray-900 truncate block" title={task.title}>
+                      <div className="text-sm font-medium text-gray-900 truncate" title={task.title}>
                         {task.title}
-                      </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900 line-clamp-2">
@@ -1961,25 +1986,15 @@ const TaskAssignment: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                  onClick={async () => {
-                    if (window.confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) {
-                      try {
-                        await deleteDoc(doc(db, 'tasks', selectedTask.id));
-                        setSelectedTask(null);
-                      } catch (error) {
-                        console.error('Error deleting task:', error);
-                      }
-                    }
-                  }}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                  onClick={() => setSelectedTask(null)}
                 >
-                  <FaTrash className="ml-2 -mr-1 h-4 w-4" />
-                  מחק משימה
+                  ביטול
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-2"
                   onClick={async () => {
                     try {
                       const taskRef = doc(db, 'tasks', selectedTask.id);
@@ -2004,10 +2019,20 @@ const TaskAssignment: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                  onClick={() => setSelectedTask(null)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  onClick={async () => {
+                    if (window.confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) {
+                      try {
+                        await deleteDoc(doc(db, 'tasks', selectedTask.id));
+                        setSelectedTask(null);
+                      } catch (error) {
+                        console.error('Error deleting task:', error);
+                      }
+                    }
+                  }}
                 >
-                  ביטול
+                  <FaTrash className="ml-2 -mr-1 h-4 w-4" />
+                  מחק משימה
                 </motion.button>
               </div>
             </div>
