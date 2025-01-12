@@ -1,23 +1,25 @@
 export interface Customer {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
-  company?: string;
-  status: 'פעיל' | 'לא פעיל';
-  notes?: string;
+  companyName: string;
+  industry: string;
+  status: string;
+  size: string;
+  annualRevenue: number;
+  website: string;
+  source: string;
+  paymentTerms: string;
+  notes: string;
+  isDeleted: boolean;
+  lastContact: Date;
+  contracts: any[];
+  tags: string[];
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
   updatedBy: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
-    country?: string;
-  };
-  metadata?: {
-    [key: string]: any;
-  };
+  userId: string;
 }

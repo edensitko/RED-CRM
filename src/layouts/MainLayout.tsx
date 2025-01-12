@@ -41,7 +41,7 @@ const MainContent = styled('main')(({ theme }) => ({
   display: 'flex',
   width: '100%',
   height: 'calc(100vh - 64px)', // Subtract header height
-  overflow: 'hidden',
+  overflowY: 'hidden',
   flexDirection: 'row-reverse',
 }));
 
@@ -58,6 +58,9 @@ const ContentContainer = styled(Box)(({ theme }) => ({
   overflowY: 'auto',
   backgroundColor: theme.palette.background.default,
   padding: theme.spacing(3),
+  '& > *': {
+    minHeight: '100%'
+  }
 }));
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -97,7 +100,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           position="sticky"
           elevation={1}
           sx={{ 
-            zIndex: theme.zIndex.drawer + 1500,
+            zIndex: theme.zIndex.drawer + 1,
             width: '100%',
             backgroundColor: theme.palette.background.paper,
             color: theme.palette.text.primary,

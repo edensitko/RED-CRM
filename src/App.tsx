@@ -26,7 +26,7 @@ import Documents from './pages/Documents';
 import Reports from './pages/Reports';
 import Payments from './pages/Payments';
 import WideScreenMessage from './pages/WideScreenMessage';
-import NotFound from './pages/NotFound'; // Import the NotFound component
+import NotFound from './pages/NotFound'; 
 import { useState, useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
