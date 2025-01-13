@@ -99,7 +99,7 @@ const Ideas = () => {
   const [newCategory, setNewCategory] = useState('');
   const [sortBy, setSortBy] = useState<'title' | 'category'>('title');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(categories);
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, Timestamp, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from './AuthContext';
 
@@ -13,6 +13,12 @@ interface TimeEntry {
   category: string;
   description: string;
   createdAt: Timestamp;
+}
+
+interface ActiveTimer {
+  isRunning: boolean;
+  startTime: string | null;
+  userId: string;
 }
 
 interface TimeTrackingContextType {
@@ -50,6 +56,30 @@ export const TimeTrackingProvider: React.FC<{ children: React.ReactNode }> = ({ 
     'אחר'
   ];
 
+  // Load timer state from Firebase on mount
+  useEffect(() => {
+    const loadTimerState = async () => {
+      if (!currentUser) return;
+
+      try {
+        const timerDocRef = doc(db, 'activeTimers', currentUser.uid);
+        const timerDoc = await getDoc(timerDocRef);
+        
+        if (timerDoc.exists()) {
+          const timerData = timerDoc.data() as ActiveTimer;
+          if (timerData.isRunning && timerData.startTime) {
+            setIsTimerRunning(true);
+            setTimerStartTime(new Date(timerData.startTime));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading timer state:', error);
+      }
+    };
+
+    loadTimerState();
+  }, [currentUser]);
+
   useEffect(() => {
     if (!currentUser) return;
 
@@ -70,13 +100,42 @@ export const TimeTrackingProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => unsubscribe();
   }, [currentUser]);
 
-  const startTimer = () => {
+  const startTimer = async () => {
+    if (!currentUser) return;
+
+    const startTime = new Date();
     setIsTimerRunning(true);
-    setTimerStartTime(new Date());
+    setTimerStartTime(startTime);
+
+    // Save timer state to Firebase
+    try {
+      const timerDocRef = doc(db, 'activeTimers', currentUser.uid);
+      await setDoc(timerDocRef, {
+        isRunning: true,
+        startTime: startTime.toISOString(),
+        userId: currentUser.uid
+      });
+    } catch (error) {
+      console.error('Error saving timer state:', error);
+    }
   };
 
-  const stopTimer = () => {
+  const stopTimer = async () => {
+    if (!currentUser) return;
+
     setIsTimerRunning(false);
+
+    // Clear timer state in Firebase
+    try {
+      const timerDocRef = doc(db, 'activeTimers', currentUser.uid);
+      await setDoc(timerDocRef, {
+        isRunning: false,
+        startTime: null,
+        userId: currentUser.uid
+      });
+    } catch (error) {
+      console.error('Error clearing timer state:', error);
+    }
   };
 
   const addTimeEntry = async (entry: Omit<TimeEntry, 'id' | 'createdAt'>) => {

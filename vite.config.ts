@@ -8,11 +8,21 @@ export default defineConfig({
     'import.meta.env.VITE_CRYPTO_UUID': JSON.stringify(true)
   },
   optimizeDeps: {
-    exclude: ['crypto']
+    exclude: ['crypto'],
+    include: ['pdfjs-dist/build/pdf.worker.min.js']
   },
   resolve: {
     alias: {
       crypto: 'crypto-browserify'
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          pdfWorker: ['pdfjs-dist/build/pdf.worker.min.js']
+        }
+      }
     }
   }
 })

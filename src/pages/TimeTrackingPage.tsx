@@ -24,12 +24,21 @@ export const TimeTrackingPage: React.FC = () => {
     let intervalId: NodeJS.Timeout;
 
     if (isTimerRunning && timerStartTime) {
+      // Initial elapsed time calculation
+      const initialElapsed = Math.floor(
+        (new Date().getTime() - timerStartTime.getTime()) / 1000
+      );
+      setElapsedTime(initialElapsed);
+
+      // Update elapsed time every second
       intervalId = setInterval(() => {
         const elapsed = Math.floor(
           (new Date().getTime() - timerStartTime.getTime()) / 1000
         );
         setElapsedTime(elapsed);
       }, 1000);
+    } else {
+      setElapsedTime(0);
     }
 
     return () => {
@@ -39,18 +48,17 @@ export const TimeTrackingPage: React.FC = () => {
     };
   }, [isTimerRunning, timerStartTime]);
 
-  const handleStartTimer = () => {
-    startTimer();
+  const handleStartTimer = async () => {
+    await startTimer();
   };
 
-  const handleStopTimer = () => {
+  const handleStopTimer = async () => {
     if (timerStartTime) {
       setModalStartTime(timerStartTime);
       setModalEndTime(new Date());
       setIsModalOpen(true);
     }
-    stopTimer();
-    setElapsedTime(0);
+    await stopTimer();
   };
 
   const formatTime = (seconds: number): string => {

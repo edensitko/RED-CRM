@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +33,12 @@ interface Task {
   dealId?: string;
   createdAt: number;
   createdBy: string;
+  project?: { id: string; name: string };
+  updatedAt?: number;
+  urgency?: string;
+  repeat?: string;
+  completedAt?: number | null;
+  previousStatus?: 'לביצוע' | 'בביצוע' | 'הושלם' | null;
 }
 
 interface Comment {
@@ -50,20 +56,33 @@ interface User {
   displayName?: string;
 }
 
+interface SortConfig {
+  key: keyof Task | '';
+  direction: 'asc' | 'desc';
+}
+
+interface Filters {
+  status: string[];
+  priority: string[];
+  search: string;
+  startDate: string;
+  endDate: string;
+}
+
 const TASK_STATUS_CONFIG = {
   'לביצוע': {
     label: 'לביצוע',
-    color: 'bg-yellow-100 text-yellow-800',
+    color: 'bg-red-100 text-red-800',
     icon: <FaSpinner className="mr-2" />
   },
   'בביצוע': {
     label: 'בביצוע',
-    color: 'bg-blue-100 text-blue-800',
+    color: 'bg-red-200 text-red-700',
     icon: <FaPause className="mr-2" />
   },
   'הושלם': {
     label: 'הושלם',
-    color: 'bg-green-100 text-green-800',
+    color: 'bg-red-300 text-red-600',
     icon: <FaCheck className="mr-2" />
   }
 } as const;
@@ -71,15 +90,15 @@ const TASK_STATUS_CONFIG = {
 const TASK_PRIORITY_CONFIG = {
   'נמוכה': {
     label: 'נמוכה',
-    color: 'bg-gray-100 text-gray-800'
+    color: 'bg-red-100 text-red-800'
   },
   'בינונית': {
     label: 'בינונית',
-    color: 'bg-yellow-100 text-yellow-800'
+    color: 'bg-red-200 text-red-700'
   },
   'גבוהה': {
     label: 'גבוהה',
-    color: 'bg-red-100 text-red-800'
+    color: 'bg-red-300 text-red-600'
   }
 } as const;
 
@@ -92,15 +111,27 @@ const Tasks: React.FC = () => {
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [newComment, setNewComment] = useState('');
-  const [activeTab, setActiveTab] = useState<'my-tasks' | 'completed-tasks'>('my-tasks');
-  const [formData, setFormData] = useState<Partial<Task>>({
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'dueDate', direction: 'asc' });
+  const [filters, setFilters] = useState<Filters>({
+    status: [],
+    priority: [],
+    search: '',
+    startDate: '',
+    endDate: ''
+  });
+  const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
     status: 'לביצוע',
     priority: 'בינונית',
-    dueDate: new Date('2025-01-08T22:25:27+02:00').toISOString().split('T')[0],
-    assignedTo: [currentUser?.uid || '']
+    dueDate: new Date().toISOString().split('T')[0],
+    assignedTo: []
   });
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [undoTask, setUndoTask] = useState<{taskId: string, previousStatus: 'לביצוע' | 'בביצוע' | 'הושלם' | null} | null>(null);
+  
+  // Add timeout ref to clear undo timer
+  const undoTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (!currentUser) return;
@@ -140,7 +171,9 @@ const Tasks: React.FC = () => {
           customerId: data.customerId,
           dealId: data.dealId,
           createdAt: data.createdAt || Date.now(),
-          createdBy: data.createdBy || currentUser?.uid || ''
+          createdBy: data.createdBy || currentUser?.uid || '',
+          completedAt: data.completedAt,
+          previousStatus: data.previousStatus
         } as Task;
       });
       setTasks(tasksList);
@@ -157,44 +190,63 @@ const Tasks: React.FC = () => {
     e.preventDefault();
     if (!currentUser) return;
 
-    const taskData: Partial<Omit<Task, 'id'>> = {
-      title: formData.title || '',
-      description: formData.description || '',
-      status: formData.status || 'לביצוע',
-      priority: formData.priority || 'בינונית',
-      dueDate: formData.dueDate || new Date().toISOString().split('T')[0],
-      assignedTo: (formData.assignedTo && formData.assignedTo.length > 0) 
-        ? formData.assignedTo 
-        : [currentUser.uid],
-      createdAt: Date.now(),
-      createdBy: currentUser.uid
-    };
-
-    // Only add optional fields if they have values
-    if (formData.customerId) {
-      taskData.customerId = formData.customerId;
-    }
-    if (formData.dealId) {
-      taskData.dealId = formData.dealId;
-    }
-
     try {
+      const taskData = {
+        title: newTask.title || '',
+        description: newTask.description || '',
+        status: newTask.status || 'לביצוע',
+        priority: newTask.priority || 'בינונית',
+        dueDate: newTask.dueDate || new Date().toISOString().split('T')[0],
+        assignedTo: [currentUser.uid],
+        createdAt: Date.now(),
+        createdBy: currentUser.uid,
+        updatedAt: Date.now()
+      };
+
       if (selectedTask) {
+        // Update existing task
         const taskRef = doc(db, 'tasks', selectedTask.id);
-        await updateDoc(taskRef, taskData);
+        await updateDoc(taskRef, {
+          ...taskData,
+          updatedAt: Date.now()
+        });
       } else {
+        // Create new task
         await addDoc(collection(db, 'tasks'), taskData);
       }
+
+      // Reset form and close modal
+      setNewTask({
+        title: '',
+        description: '',
+        status: 'לביצוע',
+        priority: 'בינונית',
+        dueDate: new Date().toISOString().split('T')[0],
+        assignedTo: []
+      });
+      setSelectedTask(null);
       setIsModalOpen(false);
-      resetForm();
     } catch (error) {
       console.error('Error saving task:', error);
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm('האם אתה בטוח שברצון למחוק משימה זו?')) return;
+  const handleEditTask = (task: Task) => {
+    setSelectedTask(task);
+    setNewTask({
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      assignedTo: task.assignedTo
+    });
+    setIsModalOpen(true);
+  };
 
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) return;
+    
     try {
       await deleteDoc(doc(db, 'tasks', taskId));
     } catch (error) {
@@ -202,472 +254,523 @@ const Tasks: React.FC = () => {
     }
   };
 
-  const handleEditTask = (task: Task) => {
-    setSelectedTask(task);
-    setFormData({
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      assignedTo: Array.isArray(task.assignedTo) ? task.assignedTo : [currentUser?.uid || ''],
-    });
-    setIsModalOpen(true);
+  const handleStatusChange = async (taskId: string, newStatus: 'לביצוע' | 'בביצוע' | 'הושלם') => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Store the previous status for undo
+      const previousStatus = task.status;
+      
+      const updates: Partial<Task> = {
+        status: newStatus,
+        updatedAt: Date.now(),
+        previousStatus
+      };
+
+      if (newStatus === 'הושלם') {
+        updates.completedAt = Date.now();
+      } else {
+        updates.completedAt = null;
+      }
+
+      await updateDoc(taskRef, updates);
+
+      // Set undo state
+      setUndoTask({ taskId, previousStatus });
+
+      // Clear previous timeout if exists
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+
+      // Clear undo state after 5 seconds
+      undoTimeoutRef.current = setTimeout(() => {
+        setUndoTask(null);
+      }, 5000);
+
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    }
   };
 
-  const handleAddComment = async () => {
-    if (!currentUser || !selectedTask || !newComment.trim()) return;
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, {
+        status: 'הושלם',
+        completedAt: Date.now()
+      });
+    } catch (error) {
+      console.error('Error completing task:', error);
+    }
+  };
 
-    const commentData = {
-      userId: currentUser.uid,
-      userName: currentUser.email,
-      content: newComment,
-      timestamp: Date.now()
-    };
+  const handleCommentSubmit = async (taskId: string) => {
+    if (!currentUser || !newComment.trim()) return;
 
     try {
-      await addDoc(collection(db, `taskComments/${selectedTask.id}`), commentData);
+      const commentData = {
+        userId: currentUser.uid,
+        userName: users.find(u => u.id === currentUser.uid)?.name || currentUser.email || 'משתמש לא ידוע',
+        content: newComment.trim(),
+        timestamp: Date.now()
+      };
+
+      const taskRef = doc(db, 'tasks', taskId);
+      const commentsRef = collection(taskRef, 'comments');
+      await addDoc(commentsRef, commentData);
+
       setNewComment('');
     } catch (error) {
       console.error('Error adding comment:', error);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      status: 'לביצוע',
-      priority: 'בינונית',
-      dueDate: new Date('2025-01-08T22:25:27+02:00').toISOString().split('T')[0],
-      assignedTo: [currentUser?.uid || '']
-    });
-    setSelectedTask(null);
+  const handleUndo = async () => {
+    if (!undoTask || !undoTask.previousStatus) return;
+
+    try {
+      const taskRef = doc(db, 'tasks', undoTask.taskId);
+      const updates: Partial<Task> = {
+        status: undoTask.previousStatus as 'לביצוע' | 'בביצוע' | 'הושלם',
+        updatedAt: Date.now(),
+        completedAt: undoTask.previousStatus === 'הושלם' ? Date.now() : null,
+        previousStatus: null
+      };
+
+      await updateDoc(taskRef, updates);
+      setUndoTask(null);
+
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+    } catch (error) {
+      console.error('Error undoing task status:', error);
+    }
   };
 
   const filteredTasks = useMemo(() => {
     if (!currentUser) return [];
+    
+    return tasks.filter((task) => {
+      // Only show tasks assigned to current user
+      if (!task.assignedTo.includes(currentUser.uid)) return false;
 
-    if (activeTab === 'my-tasks') {
-      return tasks.filter(task => task.assignedTo.includes(currentUser.uid));
-    } else {
-      return tasks.filter(task => task.status === 'הושלם');
-    }
-  }, [tasks, currentUser, activeTab]);
+      // Filter by tab
+      if (activeTab === 'active') {
+        if (task.status === 'הושלם') return false;
+      } else {
+        if (task.status !== 'הושלם') return false;
+      }
 
-  const sortedTasks = useMemo(() => {
-    return filteredTasks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }, [filteredTasks]);
+      // Filter by search
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const matchesSearch = 
+          task.title.toLowerCase().includes(searchLower) ||
+          task.description.toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
 
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user?.name || user?.displayName || user?.email || 'משתמש לא ידוע';
-  };
-
-  const getAssignedUserNames = (assignedIds: string[]) => {
-    return assignedIds
-      .map(id => users.find(user => user.id === id))
-      .filter(user => user)
-      .map(user => user?.name || user?.displayName || user?.email || 'משתמש לא ידוע')
-      .join(', ');
-  };
-
-  const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
-    try {
-      const taskRef = doc(db, 'tasks', taskId);
-      await updateDoc(taskRef, {
-        status: newStatus
-      });
-    } catch (error) {
-      console.error('Error updating task status:', error);
-    }
-  };
-
-  const MyTasksView = () => (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="divide-y">
-          {sortedTasks.map((task) => (
-            <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex items-start gap-4">
-                <button
-                  onClick={() => handleStatusChange(task.id, task.status === 'הושלם' ? 'לביצוע' : 'הושלם')}
-                  className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    task.status === 'הושלם'
-                      ? 'bg-red-500 border-red-500 text-white'
-                      : 'border-gray-300 hover:border-red-500'
-                  }`}
-                >
-                  {task.status === 'הושלם' && <FaCheck className="w-3 h-3" />}
-                </button>
-                
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h3 className={`font-medium ${task.status === 'הושלם' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                      {task.title}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditTask(task)}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300"
-                      >
-                        <FaEdit className="mr-2" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300"
-                      >
-                        <FaTrash className="mr-2" />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <p className={`text-sm mt-1 ${task.status === 'הושלם' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    {task.description}
-                  </p>
-                  
-                  <div className="flex items-center gap-4 mt-3">
-                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${TASK_PRIORITY_CONFIG[task.priority]?.color}`}>
-                      <FaStar className="mr-1" />
-                      {task.priority}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <FaCalendarAlt />
-                      {new Date(task.dueDate).toLocaleDateString('he-IL')}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {task.assignedTo.map(userId => {
-                        const user = users.find(u => u.id === userId);
-                        return (
-                          <div key={userId} className="flex items-center gap-1">
-                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <FaUser className="text-red-500 text-xs" />
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {user?.name || user?.displayName || user?.email || 'משתמש לא ידוע'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedTask(task);
-                        setIsCommentModalOpen(true);
-                      }}
-                      className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1"
-                    >
-                      <FaComment />
-                      תגובות
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const CompletedTasksView = () => (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="divide-y">
-          {sortedTasks.map((task) => (
-            <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex items-start gap-4">
-                <button
-                  onClick={() => handleStatusChange(task.id, task.status === 'הושלם' ? 'לביצוע' : 'הושלם')}
-                  className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    task.status === 'הושלם'
-                      ? 'bg-red-500 border-red-500 text-white'
-                      : 'border-gray-300 hover:border-red-500'
-                  }`}
-                >
-                  {task.status === 'הושלם' && <FaCheck className="w-3 h-3" />}
-                </button>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h3 className={`font-medium ${task.status === 'הושלם' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>{task.title}</h3>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleEditTask(task)} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300">
-                        <FaEdit className="mr-2" />
-                        Edit
-                      </button>
-                      <button onClick={() => handleDeleteTask(task.id)} className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300">
-                        <FaTrash className="mr-2" />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  <p className={`text-sm mt-1 ${task.status === 'הושלם' ? 'text-gray-400' : 'text-gray-600'}`}>{task.description}</p>
-                  <div className="flex items-center gap-4 mt-3">
-                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${TASK_PRIORITY_CONFIG[task.priority]?.color}`}>
-                      <FaStar className="mr-1" />
-                      {task.priority}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <FaCalendarAlt />
-                      {new Date(task.dueDate).toLocaleDateString('he-IL')}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {task.assignedTo.map(userId => {
-                        const user = users.find(u => u.id === userId);
-                        return (
-                          <div key={userId} className="flex items-center gap-1">
-                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
-                              <FaUser className="text-red-500 text-xs" />
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {user?.name || user?.displayName || user?.email || 'משתמש לא ידוע'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedTask(task);
-                        setIsCommentModalOpen(true);
-                      }}
-                      className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1"
-                    >
-                      <FaComment />
-                      תגובות
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+      return true;
+    }).sort((a, b) => {
+      if (!sortConfig.key) return 0;
+      
+      const aValue = sortConfig.key ? a[sortConfig.key] : null;
+      const bValue = sortConfig.key ? b[sortConfig.key] : null;
+      
+      if (aValue === undefined || aValue === null) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (bValue === undefined || bValue === null) return sortConfig.direction === 'asc' ? 1 : -1;
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [tasks, filters, sortConfig, currentUser, activeTab]);
 
   return (
     <div className="container mx-auto px-4 py-8" dir="rtl">
-      <div className="flex flex-col space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FaTasks className="text-red-500" />
-            משימות
-          </h1>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              setSelectedTask(null);
-              setIsModalOpen(true);
-            }}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex space-x-4 space-x-reverse">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`px-6 py-2.5 text-sm font-medium border-b-2 ${
+              activeTab === 'active'
+                ? 'text-red-600 border-red-600'
+                : 'text-gray-500 border-transparent hover:text-red-600 hover:border-red-300'
+            }`}
           >
-            <FaPlus />
-            משימה חדשה
-          </motion.button>
+            משימות פעילות
+          </button>
+          <button
+            onClick={() => setActiveTab('completed')}
+            className={`px-6 py-2.5 text-sm font-medium border-b-2 ${
+              activeTab === 'completed'
+                ? 'text-red-600 border-red-600'
+                : 'text-gray-500 border-transparent hover:text-red-600 hover:border-red-300'
+            }`}
+          >
+            משימות שהושלמו
+          </button>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="flex border-b">
-            <button
-              onClick={() => setActiveTab('my-tasks')}
-              className={`flex-1 px-6 py-3 text-sm font-medium border-b-2 focus:outline-none transition-colors ${
-                activeTab === 'my-tasks'
-                  ? 'border-red-500 text-red-500 bg-red-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <FaUser className={activeTab === 'my-tasks' ? 'text-red-500' : 'text-gray-400'} />
-                המשימות שלי
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('completed-tasks')}
-              className={`flex-1 px-6 py-3 text-sm font-medium border-b-2 focus:outline-none transition-colors ${
-                activeTab === 'completed-tasks'
-                  ? 'border-red-500 text-red-500 bg-red-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <FaCheck className={activeTab === 'completed-tasks' ? 'text-red-500' : 'text-gray-400'} />
-                משימות שהושלמו
-              </div>
-            </button>
-          </div>
-
-          <div className="p-4">
-            {activeTab === 'my-tasks' ? <MyTasksView /> : <CompletedTasksView />}
-          </div>
-        </div>
+        <button
+          onClick={() => {
+            setSelectedTask(null);
+            setIsModalOpen(true);
+          }}
+          className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 transition-colors duration-150 flex items-center"
+        >
+          <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          משימה חדשה
+        </button>
       </div>
+
+      {/* Search Bar */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="חיפוש משימות..."
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          className="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+        />
+      </div>
+
+      {/* Tasks List */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                סטטוס
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                משימה
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                עדיפות
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                תאריך יעד
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredTasks.map((task) => (
+              <tr 
+                key={task.id} 
+                className="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
+                onClick={() => {
+                  setSelectedTask(task);
+                  setIsModalOpen(true);
+                }}
+              >
+                <td className="px-6 py-4">
+                  <div className="flex items-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newStatus = task.status === 'הושלם' ? 'לביצוע' : 'הושלם';
+                        handleStatusChange(task.id, newStatus);
+                      }}
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
+                        task.status === 'הושלם'
+                          ? 'border-red-600 bg-red-600 hover:bg-red-700 hover:border-red-700'
+                          : 'border-gray-300 hover:border-red-400'
+                      }`}
+                      title={task.status === 'הושלם' ? 'סמן כלא הושלם' : 'סמן כהושלם'}
+                    >
+                      {task.status === 'הושלם' && (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-gray-900 mb-1">{task.title}</div>
+                  {task.description && (
+                    <div className="text-sm text-gray-500 line-clamp-2">{task.description}</div>
+                  )}
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    TASK_PRIORITY_CONFIG[task.priority]?.color || 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {task.priority}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {new Date(task.dueDate).toLocaleDateString('he-IL')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Task Details Modal */}
+      <AnimatePresence>
+        {isModalOpen && selectedTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+            onClick={() => setIsModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-white rounded-lg p-6 w-full max-w-lg"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-lg font-medium">פרטי משימה</h2>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">כותרת</label>
+                  <div className="text-sm text-gray-900">{selectedTask.title}</div>
+                </div>
+                {selectedTask.description && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">תיאור</label>
+                    <div className="text-sm text-gray-900 whitespace-pre-wrap">{selectedTask.description}</div>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">סטטוס</label>
+                  <div className="flex items-center space-x-2 space-x-reverse">
+                    <button
+                      onClick={() => handleStatusChange(selectedTask.id, selectedTask.status === 'הושלם' ? 'לביצוע' : 'הושלם')}
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
+                        selectedTask.status === 'הושלם'
+                          ? 'border-red-600 bg-red-600 hover:bg-red-700 hover:border-red-700'
+                          : 'border-gray-300 hover:border-red-400'
+                      }`}
+                    >
+                      {selectedTask.status === 'הושלם' && (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                    <span className="text-sm text-gray-900">
+                      {selectedTask.status === 'הושלם' ? 'הושלם' : 'לא הושלם'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">עדיפות</label>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    TASK_PRIORITY_CONFIG[selectedTask.priority]?.color || 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {selectedTask.priority}
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">תאריך יעד</label>
+                  <div className="text-sm text-gray-900">
+                    {new Date(selectedTask.dueDate).toLocaleDateString('he-IL')}
+                  </div>
+                </div>
+                {selectedTask.completedAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">הושלם בתאריך</label>
+                    <div className="text-sm text-gray-900">
+                      {new Date(selectedTask.completedAt).toLocaleDateString('he-IL')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Task Modal */}
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-            <motion.div 
+        {isModalOpen && !selectedTask && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden"
+              className="bg-white rounded-lg shadow-xl w-full max-w-2xl"
             >
-              <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-white flex items-center">
-                  <FaTasks className="ml-4" />
-                  {selectedTask ? 'ערוך משימה' : 'צור משימה חדשה'}
-                </h2>
-                <motion.button
-                  whileHover={{ rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    resetForm();
-                  }}
-                  className="text-white hover:bg-red-500 hover:bg-opacity-20 rounded-full p-2 transition"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </motion.button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">כותרת</label>
-                    <motion.input
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 }}
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      required
-                      placeholder="הזן כותרת למשימה"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">משתמשים מוקצים</label>
-                    <motion.select
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
-                      multiple
-                      value={formData.assignedTo || [currentUser?.uid || '']}
-                      onChange={(e) => {
-                        const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                        const assignedUsers = selectedOptions.length > 0 ? selectedOptions : [currentUser?.uid || ''];
-                        setFormData({ ...formData, assignedTo: assignedUsers });
-                      }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300 min-h-[120px]"
-                    >
-                      {users.map(user => (
-                        <option 
-                          key={user.id} 
-                          value={user.id}
-                          className="py-2"
-                        >
-                          {user.name || user.displayName || user.email || 'משתמש לא ידוע'}
-                        </option>
-                      ))}
-                    </motion.select>
-                    <p className="text-sm text-gray-500 mt-1">לחץ על Ctrl (או ⌘ במק) כדי לבחור מספר משתמשים</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">תיאור</label>
-                  <motion.textarea
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                    placeholder="תאר את המשימה"
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">סטטוס</label>
-                    <motion.select
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.4 }}
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as Task['status'] })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    >
-                      {Object.keys(TASK_STATUS_CONFIG).map((status) => (
-                        <option key={status} value={status}>
-                          {TASK_STATUS_CONFIG[status as keyof typeof TASK_STATUS_CONFIG].label}
-                        </option>
-                      ))}
-                    </motion.select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">עדיפות</label>
-                    <motion.select
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    >
-                      {Object.keys(TASK_PRIORITY_CONFIG).map((priority) => (
-                        <option key={priority} value={priority}>
-                          {TASK_PRIORITY_CONFIG[priority as keyof typeof TASK_PRIORITY_CONFIG].label}
-                        </option>
-                      ))}
-                    </motion.select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">תאריך יעד</label>
-                    <motion.input
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 }}
-                      type="date"
-                      value={formData.dueDate}
-                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-4 pt-6">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    משימה חדשה
+                  </h2>
                   <button
-                    type="button"
                     onClick={() => {
                       setIsModalOpen(false);
-                      resetForm();
+                      setNewTask({
+                        title: '',
+                        description: '',
+                        status: 'לביצוע',
+                        priority: 'בינונית',
+                        dueDate: new Date().toISOString().split('T')[0],
+                        assignedTo: []
+                      });
+                      setSelectedTask(null);
                     }}
-                    className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-300"
+                    className="text-gray-400 hover:text-gray-500"
                   >
-                    ביטול
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 text-sm font-medium text-white bg-red-500 border border-transparent rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-300"
-                  >
-                    {selectedTask ? 'עדכן משימה' : 'צור משימה'}
+                    <FaTimes className="w-6 h-6" />
                   </button>
                 </div>
-              </form>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      כותרת
+                    </label>
+                    <input
+                      type="text"
+                      value={newTask.title}
+                      onChange={(e) =>
+                        setNewTask({ ...newTask, title: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      תיאור
+                    </label>
+                    <textarea
+                      value={newTask.description}
+                      onChange={(e) =>
+                        setNewTask({ ...newTask, description: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        סטטוס
+                      </label>
+                      <select
+                        value={newTask.status}
+                        onChange={(e) =>
+                          setNewTask({ ...newTask, status: e.target.value as Task['status'] })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      >
+                        {Object.keys(TASK_STATUS_CONFIG).map((status) => (
+                          <option key={status} value={status}>
+                            {TASK_STATUS_CONFIG[status as keyof typeof TASK_STATUS_CONFIG].label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        עדיפות
+                      </label>
+                      <select
+                        value={newTask.priority}
+                        onChange={(e) =>
+                          setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      >
+                        {Object.keys(TASK_PRIORITY_CONFIG).map((priority) => (
+                          <option key={priority} value={priority}>
+                            {TASK_PRIORITY_CONFIG[priority as keyof typeof TASK_PRIORITY_CONFIG].label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      תאריך יעד
+                    </label>
+                    <input
+                      type="date"
+                      value={newTask.dueDate}
+                      onChange={(e) =>
+                        setNewTask({ ...newTask, dueDate: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      משתמשים מוקצים
+                    </label>
+                    <select
+                      multiple
+                      value={newTask.assignedTo}
+                      onChange={(e) => {
+                        const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+                        setNewTask({ ...newTask, assignedTo: selectedOptions });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    >
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name || user.displayName || user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setNewTask({
+                          title: '',
+                          description: '',
+                          status: 'לביצוע',
+                          priority: 'בינונית',
+                          dueDate: new Date().toISOString().split('T')[0],
+                          assignedTo: []
+                        });
+                        setSelectedTask(null);
+                      }}
+                      className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600"
+                    >
+                      צור משימה
+                    </button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}
@@ -676,35 +779,39 @@ const Tasks: React.FC = () => {
       {/* Comments Modal */}
       <AnimatePresence>
         {isCommentModalOpen && selectedTask && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-            <motion.div 
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden"
+              className="bg-white rounded-lg shadow-xl w-full max-w-2xl"
             >
-              <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-white flex items-center">
-                  <FaComment className="ml-4" />
-                  תגובות למשימה
-                </h2>
-                <motion.button
-                  whileHover={{ rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setIsCommentModalOpen(false)}
-                  className="text-white hover:bg-red-500 hover:bg-opacity-20 rounded-full p-2 transition"
-                >
-                  <FaTimes className="w-6 h-6" />
-                </motion.button>
-              </div>
-
               <div className="p-6">
-                <div className="space-y-4 max-h-96 overflow-y-auto mb-4">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    תגובות למשימה: {selectedTask.title}
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setIsCommentModalOpen(false);
+                      setNewComment('');
+                    }}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <FaTimes className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
                   {comments[selectedTask.id]?.map((comment) => (
-                    <div key={comment.id} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-medium">{getUserName(comment.userId)}</span>
+                    <div
+                      key={comment.id}
+                      className="bg-gray-50 rounded-lg p-4"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900">
+                          {comment.userName}
+                        </span>
                         <span className="text-sm text-gray-500">
                           {new Date(comment.timestamp).toLocaleString('he-IL')}
                         </span>
@@ -712,25 +819,21 @@ const Tasks: React.FC = () => {
                       <p className="text-gray-700">{comment.content}</p>
                     </div>
                   ))}
-                  {(!comments[selectedTask.id] || comments[selectedTask.id].length === 0) && (
-                    <p className="text-center text-gray-500">אין תגובות עדיין</p>
-                  )}
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex space-x-4">
                   <input
                     type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="הוסף תגובה..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   />
                   <button
-                    onClick={handleAddComment}
+                    onClick={() => handleCommentSubmit(selectedTask.id)}
                     disabled={!newComment.trim()}
-                    className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition duration-300 disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50"
                   >
-                    <FaComment className="w-4 h-4" />
                     שלח
                   </button>
                 </div>
@@ -739,6 +842,8 @@ const Tasks: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      
     </div>
   );
 };

@@ -141,22 +141,20 @@ function AppContent() {
                           currentUser ? (
                             <ProtectedRoute>
                               <MainLayout>
-                                <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
-                                  <Routes>
-                                    {routes.map((route) => (
-                                      <Route
-                                        key={route.path}
-                                        path={route.path}
-                                        element={route.element}
-                                      />
-                                    ))}
-                                    <Route path="/customers" element={<Customers />} />
-                                    <Route path="/tasks" element={<TaskAssignment />} />
-                                    <Route path="/chat" element={<ChatPage />} />
-                                    <Route path="/time-tracking" element={<TimeTrackingPage />} />
-                                    <Route path="*" element={<NotFound />} />
-                                  </Routes>
-                                </SnackbarProvider>
+                                <Routes>
+                                  {routes.map((route) => (
+                                    <Route
+                                      key={route.path}
+                                      path={route.path}
+                                      element={route.element}
+                                    />
+                                  ))}
+                                  <Route path="/customers" element={<Customers />} />
+                                  <Route path="/tasks" element={<TaskAssignment />} />
+                                  <Route path="/chat" element={<ChatPage />} />
+                                  <Route path="/time-tracking" element={<TimeTrackingPage />} />
+                                  <Route path="*" element={<NotFound />} />
+                                </Routes>
                               </MainLayout>
                             </ProtectedRoute>
                           ) : (
@@ -178,13 +176,24 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <ChatProvider>
-        <TimeTrackingProvider>
-          <AppContent />
-        </TimeTrackingProvider>
-      </ChatProvider>
-    </AuthProvider>
+    <StyledEngineProvider injectFirst>
+      <ThemeProvider theme={theme}>
+        <RTL>
+          <CssBaseline />
+          <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+            <AuthProvider>
+              <ChatProvider>
+                <NotesProvider>
+                  <TimeTrackingProvider>
+                    <AppContent />
+                  </TimeTrackingProvider>
+                </NotesProvider>
+              </ChatProvider>
+            </AuthProvider>
+          </SnackbarProvider>
+        </RTL>
+      </ThemeProvider>
+    </StyledEngineProvider>
   );
 }
 
