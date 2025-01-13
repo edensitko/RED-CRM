@@ -4,6 +4,7 @@ import { CssBaseline, StyledEngineProvider } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { NotesProvider } from './contexts/NotesContext';
+import { TimeTrackingProvider } from './contexts/TimeTrackingContext';
 import { theme } from './theme/theme';
 import { RTL } from './theme/rtl';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -35,6 +36,7 @@ import { SnackbarProvider } from 'notistack';
 import Ideas from './pages/Ideas';
 import StylesScreen from './styles/globalexample';
 import ChatPage from './pages/ChatPage';
+import { TimeTrackingPage } from './pages/TimeTrackingPage';
 
 // Debug component to log route changes
 const RouteLogger = () => {
@@ -60,7 +62,7 @@ const routes = [
   { path: '/ideas', element: <Ideas /> },
   { path: '/chat', element: <Chat /> },
   { path: '/task-assignment', element: <TaskAssignment /> },
-  { path: '/time-reports', element: <TimeReports /> },
+  { path: '/time-reports', element: <TimeTrackingPage /> },
   { path: '/forms', element: <Forms /> },
   { path: '/documents', element: <Documents /> },
   { path: '/reports', element: <Reports /> },
@@ -151,6 +153,7 @@ function AppContent() {
                                     <Route path="/customers" element={<Customers />} />
                                     <Route path="/tasks" element={<TaskAssignment />} />
                                     <Route path="/chat" element={<ChatPage />} />
+                                    <Route path="/time-tracking" element={<TimeTrackingPage />} />
                                     <Route path="*" element={<NotFound />} />
                                   </Routes>
                                 </SnackbarProvider>
@@ -177,7 +180,9 @@ function App() {
   return (
     <AuthProvider>
       <ChatProvider>
-        <AppContent />
+        <TimeTrackingProvider>
+          <AppContent />
+        </TimeTrackingProvider>
       </ChatProvider>
     </AuthProvider>
   );
