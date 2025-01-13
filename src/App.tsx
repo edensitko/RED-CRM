@@ -34,6 +34,7 @@ import { store, persistor } from './store';
 import { SnackbarProvider } from 'notistack';
 import Ideas from './pages/Ideas';
 import StylesScreen from './styles/globalexample';
+import ChatPage from './pages/ChatPage';
 
 // Debug component to log route changes
 const RouteLogger = () => {
@@ -92,7 +93,7 @@ function LoadingScreen() {
   );
 }
 
-function App() {
+function AppContent() {
   const { currentUser, loading } = useAuth();
 
   console.log('App component rendered');
@@ -127,8 +128,8 @@ function App() {
             <RTL>
               <CssBaseline />
               <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
-                <ChatProvider>
-                  <NotesProvider>
+                <NotesProvider>
+                  <ChatProvider>
                     <RouteLogger />
                     <Routes>
                       <Route path="/login" element={<Login />} />
@@ -147,7 +148,10 @@ function App() {
                                         element={route.element}
                                       />
                                     ))}
-                                    <Route path="*" element={<NotFound />} /> // Add the route for 404 pages
+                                    <Route path="/customers" element={<Customers />} />
+                                    <Route path="/tasks" element={<TaskAssignment />} />
+                                    <Route path="/chat" element={<ChatPage />} />
+                                    <Route path="*" element={<NotFound />} />
                                   </Routes>
                                 </SnackbarProvider>
                               </MainLayout>
@@ -158,8 +162,8 @@ function App() {
                         }
                       />
                     </Routes>
-                  </NotesProvider>
-                </ChatProvider>
+                  </ChatProvider>
+                </NotesProvider>
               </SnackbarProvider>
             </RTL>
           </ThemeProvider>
@@ -169,13 +173,21 @@ function App() {
   );
 }
 
+function App() {
+  return (
+    <AuthProvider>
+      <ChatProvider>
+        <AppContent />
+      </ChatProvider>
+    </AuthProvider>
+  );
+}
+
 function Root() {
   console.log('Root component rendered');
   return (
     <Router>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <App />
     </Router>
   );
 }

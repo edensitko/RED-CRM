@@ -16,6 +16,7 @@ import { Outlet } from 'react-router-dom';
 
 import NavigationSidebar from '../components/NavigationSidebar';
 import Sidebar from '../components/Sidebar';
+import FloatingChatButton from '../components/FloatingChatButton';
 import { NotesProvider } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
 import LogoImage from '../assets/logo.jpg';
@@ -176,6 +177,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Sidebar />
           </SidebarContainer>
         </MainContent>
+        <FloatingChatButton />
       </MainLayoutRoot>
     </NotesProvider>
   );
