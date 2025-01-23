@@ -6,7 +6,7 @@ import { ChatProvider } from './contexts/ChatContext';
 import { NotesProvider } from './contexts/NotesContext';
 import { TimeTrackingProvider } from './contexts/TimeTrackingContext';
 import { theme } from './theme/theme';
-import { RTL } from './theme/rtl';
+import RTL from './theme/rtl.tsx'; // Update the RTL import statement
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
@@ -26,6 +26,7 @@ import Forms from './pages/Forms';
 import Documents from './pages/Documents';
 import Reports from './pages/Reports';
 import Payments from './pages/Payments';
+import Settings from './pages/Settings';
 import WideScreenMessage from './pages/WideScreenMessage';
 import NotFound from './pages/NotFound'; 
 import { useState, useEffect } from 'react';
@@ -67,6 +68,7 @@ const routes = [
   { path: '/documents', element: <Documents /> },
   { path: '/reports', element: <Reports /> },
   { path: '/payments', element: <Payments /> },
+  { path: '/settings', element: <Settings /> },
   { path: '/task-assignments', element: <TaskAssignment /> },
   // { path: '/example', element: <StylesScreen /> },
   { path: '*', element: <NotFound /> },

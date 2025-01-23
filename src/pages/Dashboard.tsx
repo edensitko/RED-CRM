@@ -303,7 +303,7 @@ const Dashboard: React.FC = () => {
           flexGrow: 1,
           overflow: 'auto',
           p: 2,
-          backgroundColor: 'background.default'
+          backgroundColor: 'background.paper'
         }}
       >
         {currentLayout.length === 0 ? (

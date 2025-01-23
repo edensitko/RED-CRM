@@ -63,7 +63,7 @@ const WeatherWidget: React.FC = () => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 p: 1,
-                borderRadius: 1,
+                borderRadius: 3,
                 bgcolor: 'background.default',
               }}
             >

@@ -267,7 +267,7 @@ const Sidebar: React.FC<SidebarProps> = () => {
                   width: '100%',
                   backgroundColor: note.isTagged ? '#E8F5E9' : '#FFF9C4',
                   position: 'relative',
-                  borderRadius: 1,
+                  borderRadius: 3,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   minHeight: '60px',

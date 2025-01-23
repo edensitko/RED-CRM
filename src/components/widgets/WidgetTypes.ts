@@ -28,6 +28,7 @@ export interface LayoutItem {
   h: number;
   widget: string;
   settings?: Record<string, any>;
+  static?: boolean;
 }
 
 export interface WidgetDefinition {

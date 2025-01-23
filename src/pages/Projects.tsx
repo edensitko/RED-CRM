@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -20,79 +20,86 @@ import {
   FaClock,
   FaSearch,
   FaTimes,
-  FaStar
+  FaStar,
+  FaArrowUp,
+  FaArrowDown
 } from 'react-icons/fa';
+import SearchIcon from '@mui/icons-material/Search';
 import { customerService } from '../services/firebase/customerService';
-import { toggleProjectFavorite } from '../services/firebase/projectService';
-import { Customer } from '../types/schemas';
+import { projectService } from '../services/firebase/projectService';
+import { ProjectClass, ProjectStatus } from '../types/project';
+import {  CustomerClass } from '../types/customer';
+
 import { useAuth } from '../hooks/useAuth';
+import { Dialog } from '@headlessui/react';
+import ProjectDetails from './ProjectDetails';
+import { 
+  Paper, 
+  TextField, 
+  InputAdornment, 
+  Button,
+  IconButton,
+  ToggleButtonGroup,
+  ToggleButton,
+ 
 
-interface Project {
-  id: string;
-  name: string;
-  description: string;
-  customerId: string;
-  status: 'planning' | 'in_progress' | 'completed';
-  startDate: string;
-  endDate: string;
-  budget: number;
-  createdAt: string;
-  isFavorite?: boolean;
-}
+} from '@mui/material';
+import CreateProjectModal from '../components/CreateProjectModal';
 
-const STATUS_MAPPING = {
-  'planning': 'תכנון',
-  'in_progress': 'בביצוע',
-  'completed': 'הושלם'
+// Define the status types
+type HebrewStatus = 'לביצוע' | 'בתהליך' | 'הושלם';
+type EnglishStatus = 'planning' | 'in_progress' | 'completed';
+
+const STATUS_MAPPING: Record<HebrewStatus, EnglishStatus> = {
+  'לביצוע': 'planning',
+  'בתהליך': 'in_progress',
+  'הושלם': 'completed'
 } as const;
 
-const REVERSE_STATUS_MAPPING = {
-  'תכנון': 'planning',
-  'בביצוע': 'in_progress',
-  'הושלם': 'completed'
+const REVERSE_STATUS_MAPPING: Record<EnglishStatus, HebrewStatus> = {
+  'planning': 'לביצוע',
+  'in_progress': 'בתהליך',
+  'completed': 'הושלם'
 } as const;
 
 const PROJECT_STATUS_CONFIG = {
   'planning': { 
-    color: 'bg-red-100 text-red-800', 
-    icon: <FaSpinner className="text-red-500" />,
-    label: 'תכנון'
+    color: 'bg-red-900/30 text-red-400', 
+    icon: <FaSpinner className="text-red-400" />,
+    label: 'לביצוע'
   },
   'in_progress': { 
-    color: 'bg-yellow-100 text-yellow-800', 
-    icon: <FaPause className="text-yellow-500" />,
-    label: 'בביצוע'
+    color: 'bg-yellow-900/30 text-yellow-400', 
+    icon: <FaPause className="text-yellow-400" />,
+    label: 'בתהליך'
   },
   'completed': { 
-    color: 'bg-green-100 text-green-800', 
-    icon: <FaCheck className="text-green-500" />,
+    color: 'bg-emerald-900/30 text-emerald-400', 
+    icon: <FaCheck className="text-emerald-400" />,
     label: 'הושלם'
   }
-};
+} as const;
 
 const Projects: React.FC = () => {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [projects, setProjects] = useState<ProjectClass[]>([]);
+  const [customers, setCustomers] = useState<CustomerClass[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectClass | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'kanban' | 'list'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    customerId: '',
-    status: 'planning' as Project['status'],
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: '',
-    budget: 0
-  });
+  const [formData, setFormData] = useState(new ProjectClass({
+    status: 'לביצוע',
+    startDate: new Date().toISOString().split('T')[0]
+  }));
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [sortField, setSortField] = useState<'startDate' | 'endDate' | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const filteredProjects = projects
     .filter(project => {
@@ -105,7 +112,7 @@ const Projects: React.FC = () => {
         project.name.toLowerCase().includes(searchLower) ||
         project.description.toLowerCase().includes(searchLower) ||
         (customer && 
-          (`${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchLower) ||
+          (`${customer.name} ${customer.lastName}`.toLowerCase().includes(searchLower) ||
            customer.companyName.toLowerCase().includes(searchLower)))
       );
     });
@@ -131,30 +138,45 @@ const Projects: React.FC = () => {
     }
     acc[project.status].push(project);
     return acc;
-  }, {} as Record<Project['status'], Project[]>);
+  }, {} as Record<ProjectClass['status'], ProjectClass[]>);
 
   // Define status columns
-  const statusColumns: Project['status'][] = ['planning', 'in_progress', 'completed'];
+  const statusColumns: ProjectClass['status'][] = ['לביצוע', 'בתהליך', 'הושלם'];
 
   const onDragEnd = async (result: any) => {
     const { destination, source, draggableId } = result;
 
-    if (!destination) return;
-
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    ) {
+    if (!destination || !draggableId) {
       return;
     }
 
-    const projectRef = doc(db, `projects/${draggableId}`);
-    
+    // Don't do anything if dropped in the same place
+    if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      return;
+    }
+
     try {
-      // Convert the English status back to Hebrew for storage
-      await updateDoc(projectRef, {
-        status: STATUS_MAPPING[destination.droppableId as Project['status']]
-      });
+      // Find the project that was dragged
+      const project = projects.find(p => p.id === draggableId);
+      if (!project) {
+        console.error('Project not found:', draggableId);
+        return;
+      }
+
+      // Update the project status
+      const newStatus = destination.droppableId as ProjectStatus;
+      await projectService.updateProject(draggableId, { status: newStatus });
+
+      // Update local state
+      setProjects(prevProjects => 
+        prevProjects.map(p => {
+          if (p.id === draggableId) {
+            p.status = newStatus;
+            return p;
+          }
+          return p;
+        })
+      );
     } catch (error) {
       console.error('Error updating project status:', error);
       setError('Failed to update project status');
@@ -163,7 +185,7 @@ const Projects: React.FC = () => {
 
   const toggleFavorite = async (projectId: string, isFavorite: boolean) => {
     try {
-      await toggleProjectFavorite(projectId, isFavorite);
+      await projectService.toggleProjectFavorite(projectId, isFavorite);
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
@@ -173,88 +195,111 @@ const Projects: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch projects from Firestore
-        const projectsRef = collection(db, 'projects');
-        onSnapshot(projectsRef, (snapshot) => {
-          const data = snapshot.docs.map((doc) => {
-            const docData = doc.data();
-            return {
-              id: doc.id,
-              name: docData.name || '',
-              description: docData.description || '',
-              customerId: docData.customerId || '',
-              status: (docData.status && typeof docData.status === 'string' && docData.status in REVERSE_STATUS_MAPPING 
-                ? REVERSE_STATUS_MAPPING[docData.status as keyof typeof REVERSE_STATUS_MAPPING]
-                : 'planning') as Project['status'],
-              startDate: docData.startDate || '',
-              endDate: docData.endDate || '',
-              budget: docData.budget || 0,
-              createdAt: docData.createdAt || '',
-              isFavorite: docData.isFavorite
-            } as Project;
-          });
-          setProjects(data);
-        });
-
-        // Fetch customers from Firestore
         if (!user) {
           throw new Error('No authenticated user found');
         }
         
-        const fetchedCustomers = await customerService.getAllCustomers(user.uid);
-        setCustomers(fetchedCustomers);
+        // Subscribe to projects
+        const unsubscribe = projectService.subscribeToProjects(user.uid, (projectsData) => {
+          console.log('Received projects:', projectsData.map(p => ({ id: p.id, name: p.name })));
+          // Ensure all projects have valid IDs
+          const validProjects = projectsData.filter(project => {
+            if (!project.id) {
+              console.error('Found project without ID:', project);
+              return false;
+            }
+            return true;
+          });
+          setProjects(validProjects);
+          setLoading(false);
+        });
+
+        // Subscribe to customers
+        const customersRef = collection(db, 'Customers');
+        const q = query(
+          customersRef,
+          where('createdBy', '==', user.uid),
+          orderBy('name')
+        );
+        const unsubscribeCustomers = onSnapshot(q, (snapshot) => {
+          console.log('Customers snapshot size:', snapshot.size);
+          const customersData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('Raw customer data:', data);
+            return {
+              id: doc.id,
+              ...data
+            };
+          }) as CustomerClass[];
+          console.log('Processed customers:', customersData);
+          setCustomers(customersData);
+        });
+
+        // Fetch users
+        const usersCollection = collection(db, 'users');
+        const unsubscribeUsers = onSnapshot(usersCollection, (snapshot) => {
+          const usersData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setUsers(usersData);
+        });
+
+        // Cleanup subscription
+        return () => {
+          unsubscribe();
+          unsubscribeUsers();
+          unsubscribeCustomers();
+        };
       } catch (error) {
         console.error('Error fetching data:', error);
-      } finally {
+        setError('Failed to fetch data');
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      setError('No authenticated user found');
+      return;
+    }
 
     try {
       const projectData = {
         ...formData,
-        // Convert English status to Hebrew for storage
-        status: STATUS_MAPPING[formData.status]
+        userId: user.uid,
+        createdBy: user.uid,
+        updatedBy: user.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       if (selectedProject) {
-        const projectRef = doc(db, `projects/${selectedProject.id}`);
-        await updateDoc(projectRef, projectData);
+        await projectService.updateProject(selectedProject.id, projectData);
       } else {
-        const projectsRef = collection(db, 'projects');
-        await addDoc(projectsRef, {
-          ...projectData,
-          createdAt: new Date().toISOString(),
-        });
+        await projectService.createProject(projectData);
       }
+      
       setIsModalOpen(false);
-      setFormData({
-        name: '',
-        description: '',
-        customerId: '',
-        status: 'planning',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: '',
-        budget: 0
-      });
+      setFormData(new ProjectClass({
+        status: 'לביצוע',
+        startDate: new Date().toISOString().split('T')[0]
+      }));
       setSelectedProject(null);
     } catch (error) {
-      console.error('Error adding project:', error);
-      setError('Failed to add project');
+      console.error('Error managing project:', error);
+      setError('Failed to manage project');
     }
   };
 
   const handleDeleteProject = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
-      const projectRef = doc(db, `projects/${id}`);
       try {
-        await deleteDoc(projectRef);
+        await projectService.deleteProject(id);
       } catch (error) {
         console.error('Error deleting project:', error);
         setError('Failed to delete project');
@@ -262,10 +307,10 @@ const Projects: React.FC = () => {
     }
   };
 
-  const updateProjectStatus = async (id: string, newStatus: Project['status']) => {
+  const updateProjectStatus = async (id: string, newStatus: ProjectClass['status']) => {
     const projectRef = doc(db, `projects/${id}`);
     try {
-      await updateDoc(projectRef, { status: STATUS_MAPPING[newStatus] });
+      await updateDoc(projectRef, { status: newStatus });
     } catch (error) {
       console.error('Error updating project status:', error);
       setError('Failed to update project status');
@@ -281,80 +326,95 @@ const Projects: React.FC = () => {
             פרויקטים
           </h1>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            setSelectedProject(null);
-            setFormData({
-              name: '',
-              description: '',
-              customerId: '',
-              status: 'planning',
-              startDate: new Date().toISOString().split('T')[0],
-              endDate: '',
-              budget: 0
-            });
-            setIsModalOpen(true);
+        <Button
+          variant="contained"
+          startIcon={<FaPlus />}
+          onClick={() => setIsCreateModalOpen(true)}
+          sx={{ 
+            backgroundColor: 'primary.main',
+            '&:hover': {
+              backgroundColor: 'primary.dark',
+            }
           }}
-          className="bg-red-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-red-600 transition duration-300"
         >
-          <FaPlus className="ml-1" />
-          <span>פרויקט חדש</span>
-        </motion.button>
+          פרויקט חדש
+        </Button>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center mb-6">
         <div className="relative flex-1">
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <FaSearch className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="חפש לפי שם פרויקט, תיאור או לקוח..."
-            className="w-full pr-10 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 left-0 pl-3 flex items-center"
-            >
-              <FaTimes className="h-5 w-5 text-gray-400 hover:text-red-500" />
-            </button>
-          )}
+          <Paper 
+            elevation={3} 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              p: 2, 
+              borderRadius: 2,
+              bgcolor: 'background.default',
+              flexDirection: 'row',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <TextField
+              fullWidth
+              variant="outlined"
+              label="חיפוש פרויקטים"
+              placeholder="חיפוש"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="primary" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ 
+                '& .MuiInputBase-root': {
+                  flexDirection: 'row',
+                },
+                '& .MuiInputAdornment-root': {
+                  marginLeft: 'auto',
+                  marginRight: 0,
+                }
+              }}
+            />
+          </Paper>
         </div>
         
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowFavorites(!showFavorites)}
-            className={`p-2 rounded ${showFavorites ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'}`}
-            title={showFavorites ? 'הצג את כל הפרויקטים' : 'הצג מועדפים בלבד'}
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(e, newValue) => {
+              if (newValue !== null) {
+                setViewMode(newValue);
+              }
+            }}
+            aria-label="view mode"
+          >
+            <ToggleButton value="kanban" aria-label="kanban view">
+              <FaColumns />
+            </ToggleButton>
+            <ToggleButton value="grid" aria-label="grid view">
+              <FaThLarge />
+            </ToggleButton>
+            <ToggleButton value="list" aria-label="list view">
+              <FaList />
+            </ToggleButton>
+          </ToggleButtonGroup>
+
+          <IconButton
+            onClick={() => setShowFavorites(prev => !prev)}
+            sx={{ 
+              color: showFavorites ? 'warning.main' : 'text.secondary',
+              '&:hover': {
+                color: 'warning.main'
+              }
+            }}
           >
             <FaStar />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 rounded ${viewMode === 'grid' ? 'bg-red-500 text-white' : 'bg-gray-200'}`}
-            title="תצוגת רשת"
-          >
-            <FaThLarge />
-          </button>
-          <button
-            onClick={() => setViewMode('kanban')}
-            className={`p-2 rounded ${viewMode === 'kanban' ? 'bg-red-500 text-white' : 'bg-gray-200'}`}
-            title="תצוגת קנבן"
-          >
-            <FaColumns />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded ${viewMode === 'list' ? 'bg-red-500 text-white' : 'bg-gray-200'}`}
-            title="תצוגת רשימה"
-          >
-            <FaList />
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -371,114 +431,120 @@ const Projects: React.FC = () => {
       ) : viewMode === 'kanban' ? (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {statusColumns.map((status) => (
-              <Droppable droppableId={status} key={status}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`bg-gray-100 rounded-lg p-4 min-h-[200px] transition-colors ${
-                      snapshot.isDraggingOver ? 'bg-gray-200' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-semibold flex items-center gap-2">
-                        {PROJECT_STATUS_CONFIG[status].icon}
-                        <span>{PROJECT_STATUS_CONFIG[status].label}</span>
-                      </h2>
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${PROJECT_STATUS_CONFIG[status].color}`}>
-                        {groupedProjects[status]?.length || 0}
-                      </span>
-                    </div>
-                    <div className="space-y-4">
-                      {groupedProjects[status]?.map((project, index) => (
-                        <Draggable 
-                          key={project.id} 
-                          draggableId={project.id} 
-                          index={index}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              onClick={() => {
-                                setSelectedProject(project);
-                                setIsViewModalOpen(true);
-                              }}
-                              style={{
-                                ...provided.draggableProps.style,
-                                transform: snapshot.isDragging
-                                  ? provided.draggableProps.style?.transform
-                                  : 'none'
-                              }}
-                              className={`bg-white p-4 rounded-lg shadow transition-all cursor-pointer ${
-                                snapshot.isDragging 
-                                  ? 'shadow-lg ring-2 ring-red-500 rotate-1 scale-105' 
-                                  : 'hover:shadow-lg hover:-translate-y-1'
-                              }`}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-semibold text-lg">{project.name}</h3>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedProject(project);
-                                      setFormData(project);
-                                      setIsModalOpen(true);
-                                    }}
-                                    className="text-gray-600 hover:text-red-500"
-                                  >
-                                    <FaEdit />
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteProject(project.id);
-                                    }}
-                                    className="text-gray-600 hover:text-red-500"
-                                  >
-                                    <FaTrash />
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFavorite(project.id, project.isFavorite ?? false);
-                                    }}
-                                    className={`text-gray-600 hover:text-yellow-500 ${project.isFavorite ? 'text-yellow-500' : ''}`}
-                                  >
-                                    <FaStar />
-                                  </button>
+            {Object.entries(groupedProjects).map(([status, statusProjects]) => (
+              <div key={status} className="flex-1 min-w-[300px] mx-2">
+                <div className={`p-4 rounded-lg ${
+                  status === 'הושלם' 
+                    ? 'bg-emerald-900/10 border border-emerald-400/20' 
+                    : status === 'בתהליך'
+                    ? 'bg-yellow-900/10 border border-yellow-400/20'
+                    : 'bg-red-900/10 border border-red-400/20'
+                }`}>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    {PROJECT_STATUS_CONFIG[STATUS_MAPPING[status as HebrewStatus]].icon}
+                    <span className={`px-2 py-1 rounded-full text-sm ${PROJECT_STATUS_CONFIG[STATUS_MAPPING[status as HebrewStatus]].color}`}>
+                      {status}
+                    </span>
+                  </h3>
+                  <Droppable droppableId={status}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className="space-y-4"
+                      >
+                        {statusProjects.map((project, index) => (
+                          <Draggable
+                            key={project.id}
+                            draggableId={project.id}
+                            index={index}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                onClick={() => {
+                                  setSelectedProject(project);
+                                  setIsViewModalOpen(true);
+                                }}
+                                style={{
+                                  ...provided.draggableProps.style,
+                                  transform: snapshot.isDragging
+                                    ? provided.draggableProps.style?.transform
+                                    : 'none',
+                                  opacity: project.status === 'הושלם' ? 0.8 : 1,
+                                }}
+                                className={`bg-[#141414] p-4 rounded-lg shadow transition-all cursor-pointer text-gray-300 ${
+                                  snapshot.isDragging 
+                                    ? 'shadow-lg ring-2 ring-red-500 rotate-1 scale-105' 
+                                    : project.status === 'הושלם'
+                                    ? 'hover:shadow-lg hover:-translate-y-1 border border-emerald-400/20 bg-emerald-900/10'
+                                    : 'hover:shadow-lg hover:-translate-y-1'
+                                }`}
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <h3 className="font-semibold text-lg text-white">{project.name}</h3>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedProject(project);
+                                        setFormData(project);
+                                        setIsModalOpen(true);
+                                      }}
+                                      className="text-gray-600 hover:text-red-500"
+                                    >
+                                      <FaEdit />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteProject(project.id);
+                                      }}
+                                      className="text-gray-600 hover:text-red-500"
+                                    >
+                                      <FaTrash />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavorite(project.id, project.isFavorite ?? false);
+                                      }}
+                                      className={`text-gray-600 hover:text-yellow-500 ${project.isFavorite ? 'text-yellow-500' : ''}`}
+                                    >
+                                      <FaStar />
+                                    </button>
+                                  </div>
                                 </div>
+                                <p className="text-gray-400 mb-3">{project.description}</p>
+                                <div className="flex justify-between items-center text-sm text-gray-400">
+                                  <div className="flex items-center gap-1">
+                                    <FaCalendarAlt />
+                                    <span>{new Date(project.startDate).toLocaleDateString('he-IL')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <FaUsers />
+                                    <span>
+                                      {customers.find(c => c.id === project.customerId)?.name || 'לא נבחר לקוח'}
+                                    </span>
+                                  </div>
+                                </div>
+                                {project.budget > 0 && (
+                                  <div className="mt-2 text-sm font-semibold text-gray-400">
+                                    ₪{project.budget.toLocaleString()}
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-gray-600 text-sm mb-3">{project.description}</p>
-                              <div className="flex justify-between items-center text-sm text-gray-500">
-                                <div className="flex items-center gap-1">
-                                  <FaCalendarAlt />
-                                  <span>{new Date(project.startDate).toLocaleDateString('he-IL')}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <FaUsers />
-                                  <span>
-                                    {customers.find(c => c.id === project.customerId)?.firstName || 'לא נבחר לקוח'}
-                                  </span>
-                                </div>
-                              </div>
-                              {project.budget > 0 && (
-                                <div className="mt-2 text-sm font-semibold text-gray-700">
-                                  ₪{project.budget.toLocaleString()}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  </div>
-                )}
-              </Droppable>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              </div>
             ))}
           </div>
         </DragDropContext>
@@ -535,13 +601,13 @@ const Projects: React.FC = () => {
                     <div className="text-sm text-gray-500">{project.description}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${PROJECT_STATUS_CONFIG[project.status].color}`}>
-                      {PROJECT_STATUS_CONFIG[project.status].icon}
-                      <span className="mr-2">{PROJECT_STATUS_CONFIG[project.status].label}</span>
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].color}`}>
+                      {PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].icon}
+                      <span className="mr-2">{PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].label}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {customers.find(c => c.id === project.customerId)?.firstName || 'לא נבחר לקוח'}
+                    {customers.find(c => c.id === project.customerId)?.name || 'לא נבחר לקוח'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(project.startDate).toLocaleDateString('he-IL')}
@@ -605,11 +671,15 @@ const Projects: React.FC = () => {
                 setSelectedProject(project);
                 setIsViewModalOpen(true);
               }}
-              className="bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+              className="bg-[#141414] p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow cursor-pointer text-gray-300"
             >
               <div className="flex justify-between items-start mb-4">
-                <h3 className="font-semibold text-xl">{project.name}</h3>
+                <h3 className="font-semibold text-xl text-white">{project.name}</h3>
                 <div className="flex gap-2">
+                  <div className={`px-2 py-1 rounded-full text-sm flex items-center gap-1 ${PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].color}`}>
+                    {PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].icon}
+                    <span>{project.status}</span>
+                  </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -617,7 +687,7 @@ const Projects: React.FC = () => {
                       setFormData(project);
                       setIsModalOpen(true);
                     }}
-                    className="text-gray-600 hover:text-red-500"
+                    className="text-gray-400 hover:text-red-500"
                   >
                     <FaEdit />
                   </button>
@@ -626,7 +696,7 @@ const Projects: React.FC = () => {
                       e.stopPropagation();
                       handleDeleteProject(project.id);
                     }}
-                    className="text-gray-600 hover:text-red-500"
+                    className="text-gray-400 hover:text-red-500"
                   >
                     <FaTrash />
                   </button>
@@ -635,40 +705,43 @@ const Projects: React.FC = () => {
                       e.stopPropagation();
                       toggleFavorite(project.id, project.isFavorite ?? false);
                     }}
-                    className={`text-gray-600 hover:text-yellow-500 ${project.isFavorite ? 'text-yellow-500' : ''}`}
+                    className={`text-gray-400 hover:text-yellow-500 ${project.isFavorite ? 'text-yellow-500' : ''}`}
                   >
                     <FaStar />
                   </button>
                 </div>
               </div>
-              <p className="text-gray-600 mb-4">{project.description}</p>
-              <div className="space-y-3">
-                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${PROJECT_STATUS_CONFIG[project.status].color}`}>
-                  {PROJECT_STATUS_CONFIG[project.status].icon}
-                  <span className="mr-2">{PROJECT_STATUS_CONFIG[project.status].label}</span>
+              <p className="text-gray-400 mb-4">{project.description}</p>
+              <div className="flex items-center justify-between text-sm text-gray-400">
+                <div className="flex items-center gap-1">
+                  <FaCalendarAlt />
+                  <span>{new Date(project.startDate).toLocaleDateString('he-IL')}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <FaCalendarAlt />
-                    <span>{new Date(project.startDate).toLocaleDateString('he-IL')}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaUsers />
-                    <span>
-                      {customers.find(c => c.id === project.customerId)?.firstName || 'לא נבחר לקוח'}
-                    </span>
-                  </div>
+                <div className={`px-3 py-1 rounded-full text-sm ${PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].color}`}>
+                  {PROJECT_STATUS_CONFIG[STATUS_MAPPING[project.status as HebrewStatus]].label}
                 </div>
-                {project.budget > 0 && (
-                  <div className="text-lg font-semibold text-gray-700">
-                    ₪{project.budget.toLocaleString()}
-                  </div>
-                )}
               </div>
+              {project.budget > 0 && (
+                <div className="mt-3 text-sm font-semibold text-gray-400">
+                  ₪{project.budget.toLocaleString()}
+                </div>
+              )}
             </motion.div>
           ))}
         </div>
       )}
+
+      {/* Create Project Modal */}
+      <CreateProjectModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onProjectCreated={(project) => {
+          setProjects([...projects, project]);
+          setIsCreateModalOpen(false);
+        }}
+        users={users}
+        userId={user?.uid || ''}
+      />
 
       {/* Add Project Modal */}
       {isModalOpen && (
@@ -709,7 +782,7 @@ const Projects: React.FC = () => {
                     transition={{ delay: 0.1 }}
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => setFormData(new ProjectClass({ ...formData, name: e.target.value }))}
                     required
                     placeholder="הזן שם פרויקט"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
@@ -725,14 +798,14 @@ const Projects: React.FC = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 }}
                     value={formData.customerId}
-                    onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                    onChange={(e) => setFormData(new ProjectClass({ ...formData, customerId: e.target.value }))}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
                   >
                     <option value="">בחר לקוח</option>
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
-                        {customer.firstName} {customer.lastName} ({customer.companyName})
+                        {customer.name} {customer.lastName}
                       </option>
                     ))}
                   </motion.select>
@@ -748,7 +821,7 @@ const Projects: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => setFormData(new ProjectClass({ ...formData, description: e.target.value }))}
                   required
                   placeholder="תאר את מטרות ודרישות הפרויקט"
                   rows={4}
@@ -767,7 +840,7 @@ const Projects: React.FC = () => {
                     transition={{ delay: 0.4 }}
                     type="date"
                     value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                    onChange={(e) => setFormData(new ProjectClass({ ...formData, startDate: e.target.value }))}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
                   />
@@ -783,7 +856,7 @@ const Projects: React.FC = () => {
                     transition={{ delay: 0.5 }}
                     type="date"
                     value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                    onChange={(e) => setFormData(new ProjectClass({ ...formData, endDate: e.target.value }))}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
                   />
@@ -799,7 +872,7 @@ const Projects: React.FC = () => {
                     transition={{ delay: 0.6 }}
                     type="number"
                     value={formData.budget}
-                    onChange={(e) => setFormData({ ...formData, budget: Number(e.target.value) })}
+                    onChange={(e) => setFormData(new ProjectClass({ ...formData, budget: Number(e.target.value) }))}
                     required
                     min="0"
                     placeholder="תקציב הפרויקט"
@@ -818,11 +891,11 @@ const Projects: React.FC = () => {
                   transition={{ delay: 0.7 }}
                   className="grid grid-cols-2 md:grid-cols-4 gap-4"
                 >
-                  {(['planning', 'in_progress', 'completed'] as Project['status'][]).map((status) => (
+                  {(['לביצוע', 'בתהליך', 'הושלם'] as const).map((status) => (
                     <label 
                       key={status} 
                       className={`flex items-center justify-center p-3 rounded-lg cursor-pointer transition duration-300 ${
-                        formData.status === status 
+                        formData.status === status
                           ? 'bg-blue-100 border-blue-500 border-2' 
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
@@ -831,10 +904,10 @@ const Projects: React.FC = () => {
                         type="radio" 
                         value={status}
                         checked={formData.status === status}
-                        onChange={() => setFormData({ ...formData, status: status })}
+                        onChange={() => setFormData(new ProjectClass({ ...formData, status }))}
                         className="hidden"
                       />
-                      {PROJECT_STATUS_CONFIG[status].label}
+                      {PROJECT_STATUS_CONFIG[STATUS_MAPPING[status] as keyof typeof PROJECT_STATUS_CONFIG].label}
                     </label>
                   ))}
                 </motion.div>
@@ -865,207 +938,82 @@ const Projects: React.FC = () => {
       )}
 
       {/* View Modal */}
-      {isViewModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden">
-            <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white flex items-center">
-                <FaProjectDiagram className="ml-4" /> 
-                {selectedProject ? 'פרטי פרויקט' : ''}
-              </h2>
-              <motion.button
-                whileHover={{ rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setIsViewModalOpen(false)}
-                className="text-red-600 hover:bg-red-500 rounded-full p-2 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </motion.button>
-            </div>
-
-            {selectedProject && (
-              <div className="space-y-6 p-8">
-                <div className="flex justify-between items-start">
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedProject.name}</h2>
-                  <div className="flex items-center gap-2">
-                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${PROJECT_STATUS_CONFIG[selectedProject.status].color}`}>
-                      {PROJECT_STATUS_CONFIG[selectedProject.status].icon}
-                      <span className="mr-2">{PROJECT_STATUS_CONFIG[selectedProject.status].label}</span>
-                    </div>
-                    <button
-                      onClick={() => toggleFavorite(selectedProject.id, selectedProject.isFavorite ?? false)}
-                      className={`p-2 rounded hover:bg-gray-100 ${selectedProject.isFavorite ? 'text-yellow-500' : 'text-gray-400'}`}
-                      title={selectedProject.isFavorite ? 'הסר ממועדפים' : 'הוסף למועדפים'}
-                    >
-                      <FaStar className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">תיאור הפרויקט</h3>
-                  <p className="text-gray-700">{selectedProject.description || 'אין תיאור'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">לקוח</h3>
-                    <p className="text-gray-700">
-                      {customers.find(c => c.id === selectedProject.customerId)?.firstName || 'לא נבחר לקוח'}
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">תקציב</h3>
-                    <p className="text-gray-700">₪{selectedProject.budget.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">תאריך התחלה</h3>
-                    <p className="text-gray-700">
-                      {new Date(selectedProject.startDate).toLocaleDateString('he-IL')}
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">תאריך סיום</h3>
-                    <p className="text-gray-700">
-                      {selectedProject.endDate 
-                        ? new Date(selectedProject.endDate).toLocaleDateString('he-IL')
-                        : 'לא נקבע'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => {
-                      setIsViewModalOpen(false);
-                      setTimeout(() => {
-                        setFormData(selectedProject);
-                        setIsModalOpen(true);
-                      }, 300);
-                    }}
-                    className="bg-red-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-red-700 transition duration-300"
-                  >
-                    <FaEdit className="ml-1" />
-                    <span>ערוך</span>
-                  </button>
-                  <button
-                    onClick={() => setIsViewModalOpen(false)}
-                    className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition duration-300 "
-                  >
-                    סגור
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      <ProjectDetails
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        project={selectedProject}
+        customers={customers} users={users}      />
         
-      )}
-        {/* Statistics Section */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" dir="rtl">
+      {/* Statistics Section */}
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" dir="rtl">
         {/* Total Projects */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-t-4 border-red-500">
+        <div className="bg-[#1e1e1e] rounded-xl shadow-md p-6 border-t-4 border-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">סה"כ פרויקטים</p>
-              <p className="text-3xl font-bold text-gray-900">{projects.length}</p>
+              <p className="text-sm font-medium text-gray-400 mb-1">סה"כ פרויקטים</p>
+              <p className="text-3xl font-bold text-white">{projects.length}</p>
             </div>
-            <div className="bg-red-100 rounded-full p-3">
-              <FaProjectDiagram className="h-6 w-6 text-red-600" />
+            <div className="bg-red-900/20 rounded-full p-3">
+              <FaProjectDiagram className="h-6 w-6 text-red-500" />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-sm">
             <div>
-              <span className="font-medium text-gray-500">בביצוע: </span>
-              <span className="font-bold text-gray-900">
-                {projects.filter(p => p.status === 'in_progress').length}
+              <span className="font-medium text-gray-400">בתהליך: </span>
+              <span className="font-bold text-gray-300">
+                {projects.filter(p => p.status === 'בתהליך').length}
               </span>
             </div>
             <div>
-              <span className="font-medium text-gray-500">הושלמו: </span>
-              <span className="font-bold text-gray-900">
-                {projects.filter(p => p.status === 'completed').length}
+              <span className="font-medium text-gray-400">הושלמו: </span>
+              <span className="font-bold text-gray-300">
+                {projects.filter(p => p.status === 'הושלם').length}
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* In Progress */}
+        <div className="bg-[#1e1e1e] rounded-xl shadow-md p-6 border-t-4 border-yellow-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-400 mb-1">פרויקטים בתהליך</p>
+              <p className="text-3xl font-bold text-white">
+                {projects.filter(p => p.status === 'בתהליך').length}
+              </p>
+            </div>
+            <div className="bg-yellow-900/20 rounded-full p-3">
+              <FaClock className="h-6 w-6 text-yellow-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Completed */}
+        <div className="bg-[#1e1e1e] rounded-xl shadow-md p-6 border border-emerald-400/20 bg-emerald-900/10">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-emerald-400 mb-1">פרויקטים שהושלמו</p>
+              <p className="text-2xl font-semibold text-emerald-300">
+                {projects.filter(p => p.status === 'הושלם').length}
+              </p>
+            </div>
+            <div className="bg-emerald-900/40 rounded-full p-3">
+              <FaCheck className="h-6 w-6 text-emerald-400" />
             </div>
           </div>
         </div>
 
         {/* Total Budget */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500">
+        <div className="bg-[#1e1e1e] rounded-xl shadow-md p-6 border-t-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">סה"כ תקציב</p>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-400 mb-1">סה"כ תקציב</p>
+              <p className="text-3xl font-bold text-white">
                 ₪{projects.reduce((sum, p) => sum + (p.budget || 0), 0).toLocaleString()}
               </p>
             </div>
-            <div className="bg-green-100 rounded-full p-3">
-              <FaMoneyBillWave className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <div>
-              <span className="font-medium text-gray-500">ממוצע לפרויקט: </span>
-              <span className="font-bold text-gray-900">
-                ₪{(projects.reduce((sum, p) => sum + (p.budget || 0), 0) / (projects.length || 1)).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Project Duration */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">משך זמן ממוצע</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {Math.round(projects.reduce((sum, p) => {
-                  const start = new Date(p.startDate);
-                  const end = p.endDate ? new Date(p.endDate) : new Date();
-                  return sum + (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-                }, 0) / (projects.length || 1))} ימים
-              </p>
-            </div>
-            <div className="bg-blue-100 rounded-full p-3">
-              <FaClock className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <div>
-              <span className="font-medium text-gray-500">פרויקטים פעילים: </span>
-              <span className="font-bold text-gray-900">
-                {projects.filter(p => p.status !== 'completed').length}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Customers */}
-        <div className="bg-white rounded-xl shadow-md p-6 border-t-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">לקוחות עם פרויקטים</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {new Set(projects.map(p => p.customerId)).size}
-              </p>
-            </div>
-            <div className="bg-purple-100 rounded-full p-3">
-              <FaUsers className="h-6 w-6 text-purple-600" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <div>
-              <span className="font-medium text-gray-500">ממוצע פרויקטים ללקוח: </span>
-              <span className="font-bold text-gray-900">
-                {(projects.length / (new Set(projects.map(p => p.customerId)).size || 1)).toFixed(1)}
-              </span>
+            <div className="bg-blue-900/20 rounded-full p-3">
+              <FaMoneyBillWave className="h-6 w-6 text-blue-500" />
             </div>
           </div>
         </div>

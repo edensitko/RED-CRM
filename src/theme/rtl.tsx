@@ -13,6 +13,6 @@ interface RTLProps {
   children: React.ReactNode;
 }
 
-export function RTL(props: RTLProps) {
+export default function RTL(props: RTLProps) {
   return <CacheProvider value={cacheRtl}>{props.children}</CacheProvider>;
 }

@@ -44,7 +44,7 @@ const CustomerFeedbackWidget: React.FC = () => {
             sx={{
               mb: 2,
               p: 2,
-              borderRadius: 1,
+              borderRadius: 3,
               bgcolor: 'background.default',
             }}
           >

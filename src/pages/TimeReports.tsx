@@ -136,339 +136,115 @@ const TimeReports: React.FC = () => {
   //   return projectHours;
   // };
 
-  // return (
-  //   <div className="space-y-6">
-  //     <div className="sm:flex sm:items-center">
-  //       <div className="sm:flex-auto">
-  //         <h1 className="text-2xl font-semibold text-gray-900">דיווחי שעות</h1>
-  //         <p className="mt-2 text-sm text-gray-700">
-  //           ניהול ומעקב אחר שעות עבודה
-  //         </p>
-  //       </div>
-  //       <div className="mt-4 sm:mt-0 sm:mr-16 sm:flex-none">
-  //         <button
-  //           onClick={() => {
-  //             setCurrentEntry({});
-  //             setIsModalOpen(true);
-  //           }}
-  //           className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:w-auto"
-  //         >
-  //           דיווח חדש
-  //         </button>
-  //       </div>
-  //     </div>
-
-  //     {/* Filters */}
-  //     <div className="flex flex-wrap gap-4">
-  //       <div className="flex items-center space-x-2 rtl:space-x-reverse">
-  //         <button
-  //           onClick={() => setFilter('all')}
-  //           className={`px-4 py-2 text-sm font-medium rounded-md ${
-  //             filter === 'all'
-  //               ? 'bg-red-100 text-red-700'
-  //               : 'text-gray-700 hover:bg-gray-50'
-  //           }`}
-  //         >
-  //           כל הדיווחים
-  //         </button>
-  //         <button
-  //           onClick={() => setFilter('my')}
-  //           className={`px-4 py-2 text-sm font-medium rounded-md ${
-  //             filter === 'my'
-  //               ? 'bg-red-100 text-red-700'
-  //               : 'text-gray-700 hover:bg-gray-50'
-  //           }`}
-  //         >
-  //           הדיווחים שלי
-  //         </button>
-  //       </div>
-  //       <div className="flex items-center space-x-2 rtl:space-x-reverse">
-  //         <input
-  //           type="date"
-  //           value={dateRange.start}
-  //           onChange={(e) =>
-  //             setDateRange({ ...dateRange, start: e.target.value })
-  //           }
-  //           className="rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //         />
-  //         <span>עד</span>
-  //         <input
-  //           type="date"
-  //           value={dateRange.end}
-  //           onChange={(e) =>
-  //             setDateRange({ ...dateRange, end: e.target.value })
-  //           }
-  //           className="rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //         />
-  //       </div>
-  //     </div>
-
-  //     {/* Summary */}
-  //     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-  //       <div className="bg-white overflow-hidden shadow rounded-lg">
-  //         <div className="p-5">
-  //           <div className="flex items-center">
-  //             <div className="flex-shrink-0">
-  //               <div className="bg-red-100 rounded-md p-3">
-  //                 <svg
-  //                   className="h-6 w-6 text-red-600"
-  //                   fill="none"
-  //                   viewBox="0 0 24 24"
-  //                   stroke="currentColor"
-  //                 >
-  //                   <path
-  //                     strokeLinecap="round"
-  //                     strokeLinejoin="round"
-  //                     strokeWidth={2}
-  //                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-  //                   />
-  //                 </svg>
-  //               </div>
-  //             </div>
-  //             <div className="mr-5 w-0 flex-1">
-  //               <dl>
-  //                 <dt className="text-sm font-medium text-gray-500 truncate">
-  //                   סך הכל שעות
-  //                 </dt>
-  //                 <dd className="text-lg font-medium text-gray-900">
-  //                   {getTotalHours().toFixed(1)}
-  //                 </dd>
-  //               </dl>
-  //             </div>
-  //           </div>
-  //         </div>
-  //       </div>
-  //     </div>
-
-  //     {/* Time Entries Table */}
-  //     <div className="bg-white shadow overflow-hidden sm:rounded-md">
-  //       <table className="min-w-full divide-y divide-gray-200">
-  //         <thead className="bg-gray-50">
-  //           <tr>
-  //             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-  //               תאריך
-  //             </th>
-  //             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-  //               פרויקט
-  //             </th>
-  //             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-  //               משימה
-  //             </th>
-  //             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-  //               שעות
-  //             </th>
-  //             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-  //               עובד
-  //             </th>
-  //             <th className="relative px-6 py-3">
-  //               <span className="sr-only">פעולות</span>
-  //             </th>
-  //           </tr>
-  //         </thead>
-  //         <tbody className="bg-white divide-y divide-gray-200">
-  //           {timeEntries.map((entry) => (
-  //             <tr key={entry.id}>
-  //               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-  //                 {entry.date}
-  //               </td>
-  //               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-  //                 {projects.find((p) => p.id === entry.project)?.name}
-  //               </td>
-  //               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-  //                 {entry.task}
-  //               </td>
-  //               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-  //                 {entry.duration.toFixed(1)}
-  //               </td>
-  //               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-  //                 {users.find((u) => u.id === entry.userId)?.displayName}
-  //               </td>
-  //               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-  //                 <button
-  //                   onClick={() => {
-  //                     setCurrentEntry(entry);
-  //                     setIsModalOpen(true);
-  //                   }}
-  //                   className="text-red-600 hover:text-red-900 ml-4"
-  //                 >
-  //                   ערוך
-  //                 </button>
-  //                 <button
-  //                   onClick={() => handleDelete(entry.id)}
-  //                   className="text-gray-600 hover:text-gray-900"
-  //                 >
-  //                   מחק
-  //                 </button>
-  //               </td>
-  //             </tr>
-  //           ))}
-  //         </tbody>
-  //       </table>
-  //     </div>
-
-  //     {/* Time Entry Modal */}
-  //     {isModalOpen && (
-  //       <div className="fixed inset-0 z-10 overflow-y-auto">
-  //         <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-  //           <div
-  //             className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-  //             onClick={() => setIsModalOpen(false)}
-  //           ></div>
-
-  //           <div className="inline-block transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-right shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-  //             <form onSubmit={handleSubmit} className="space-y-4">
-  //               <div>
-  //                 <label className="block text-sm font-medium text-gray-700">
-  //                   תאריך
-  //                 </label>
-  //                 <input
-  //                   type="date"
-  //                   value={currentEntry.date || ''}
-  //                   onChange={(e) =>
-  //                     setCurrentEntry({
-  //                       ...currentEntry,
-  //                       date: e.target.value,
-  //                     })
-  //                   }
-  //                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                   required
-  //                 />
-  //               </div>
-
-  //               <div>
-  //                 <label className="block text-sm font-medium text-gray-700">
-  //                   פרויקט
-  //                 </label>
-  //                 <select
-  //                   value={currentEntry.project || ''}
-  //                   onChange={(e) =>
-  //                     setCurrentEntry({
-  //                       ...currentEntry,
-  //                       project: e.target.value,
-  //                     })
-  //                   }
-  //                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                   required
-  //                 >
-  //                   <option value="">בחר פרויקט</option>
-  //                   {projects.map((project) => (
-  //                     <option key={project.id} value={project.id}>
-  //                       {project.name}
-  //                     </option>
-  //                   ))}
-  //                 </select>
-  //               </div>
-
-  //               <div>
-  //                 <label className="block text-sm font-medium text-gray-700">
-  //                   משימה
-  //                 </label>
-  //                 <input
-  //                   type="text"
-  //                   value={currentEntry.task || ''}
-  //                   onChange={(e) =>
-  //                     setCurrentEntry({
-  //                       ...currentEntry,
-  //                       task: e.target.value,
-  //                     })
-  //                   }
-  //                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                   required
-  //                 />
-  //               </div>
-
-  //               <div>
-  //                 <label className="block text-sm font-medium text-gray-700">
-  //                   תיאור
-  //                 </label>
-  //                 <textarea
-  //                   value={currentEntry.description || ''}
-  //                   onChange={(e) =>
-  //                     setCurrentEntry({
-  //                       ...currentEntry,
-  //                       description: e.target.value,
-  //                     })
-  //                   }
-  //                   rows={3}
-  //                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                 />
-  //               </div>
-
-  //               <div className="grid grid-cols-2 gap-4">
-  //                 <div>
-  //                   <label className="block text-sm font-medium text-gray-700">
-  //                     שעת התחלה
-  //                   </label>
-  //                   <input
-  //                     type="time"
-  //                     value={currentEntry.startTime || ''}
-  //                     onChange={(e) =>
-  //                       setCurrentEntry({
-  //                         ...currentEntry,
-  //                         startTime: e.target.value 
-  //                       })
-  //                     }
-  //                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                     required
-  //                   />
-  //                 </div>
-  //                 <div>
-  //                   <label className="block text-sm font-medium text-gray-700">
-  //                     שעת סיום
-  //                   </label>
-  //                   <input
-  //                     type="time"
-  //                     value={currentEntry.endTime || ''}
-  //                     onChange={(e) =>
-  //                       setCurrentEntry({
-  //                         ...currentEntry,
-  //                         endTime: e.target.value,
-  //                       })
-  //                     }
-  //                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm"
-  //                     required
-  //                   />
-  //                 </div>
-  //               </div>
-
-  //               <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-  //                 <button
-  //                   type="submit"
-  //                   className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:col-start-2 sm:text-sm"
-  //                 >
-  //                   {currentEntry.id ? 'עדכן' : 'צור'} דיווח
-  //                 </button>
-  //                 <button
-  //                   type="button"
-  //                   onClick={() => setIsModalOpen(false)}
-  //                   className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:col-start-1 sm:mt-0 sm:text-sm"
-  //                 >
-  //                   ביטול
-  //                 </button>
-  //               </div>
-  //             </form>
-  //           </div>
-  //         </div>
-  //       </div>
-  //     )}
-  //   </div>
-  // );
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100" dir="rtl">
-      <div className="text-center p-10 bg-white rounded-xl shadow-2xl max-w-md w-full">
-        <div className="flex justify-center mb-6">
-          <FaTools className="text-6xl text-red-500 animate-bounce" />
+    <div className="min-h-screen bg-[#121212] text-gray-200 p-6" dir="rtl">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-white">דוחות זמן</h1>
+          <button 
+            className="bg-red-700 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors"
+            onClick={() => {
+              // Add logic to create new time entry
+            }}
+          >
+            דיווח חדש
+          </button>
         </div>
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          עמוד בשיפוצים
-        </h1>
-        <p className="text-gray-600 mb-6">
-          הדף נמצא כרגע בתהליך של שדרוג ושיפוץ. אנא חזור מאוחר יותר.
-        </p>
-        <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded">
-          <p className="text-yellow-700">
-            <strong>הודעה:</strong> אנו עובדים על שיפור חווית המשתמש. תודה על הסבלנות.
-          </p>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left Column - Time Entry Form */}
+          <div className="bg-[#1E1E1E] p-6 rounded-lg shadow-lg">
+            <h2 className="text-xl font-semibold text-white mb-4">הזנת דיווח שעות</h2>
+            <form className="space-y-4">
+              {/* Date Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  תאריך
+                </label>
+                <input
+                  type="date"
+                  className="w-full bg-[#2A2A2A] text-gray-200 border-gray-700 rounded-md focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              {/* Start Time Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  שעת התחלה
+                </label>
+                <input
+                  type="time"
+                  className="w-full bg-[#2A2A2A] text-gray-200 border-gray-700 rounded-md focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              {/* End Time Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  שעת סיום
+                </label>
+                <input
+                  type="time"
+                  className="w-full bg-[#2A2A2A] text-gray-200 border-gray-700 rounded-md focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex space-x-4 rtl:space-x-reverse">
+                <button
+                  type="submit"
+                  className="flex-1 bg-red-700 text-white py-2 rounded-md hover:bg-red-600 transition-colors"
+                >
+                  צור דיווח
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 bg-gray-700 text-gray-200 py-2 rounded-md hover:bg-gray-600 transition-colors"
+                >
+                  ביטול
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Middle Column - Time Entries List */}
+          <div className="bg-[#1E1E1E] p-6 rounded-lg shadow-lg md:col-span-2">
+            <h2 className="text-xl font-semibold text-white mb-4">דיווחי שעות</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-gray-300">
+                <thead className="bg-[#2A2A2A] text-gray-400 uppercase">
+                  <tr>
+                    <th className="px-4 py-3">תאריך</th>
+                    <th className="px-4 py-3">שעת התחלה</th>
+                    <th className="px-4 py-3">שעת סיום</th>
+                    <th className="px-4 py-3">משך זמן</th>
+                    <th className="px-4 py-3">פעולות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Placeholder for time entries */}
+                  <tr className="border-b border-gray-700 hover:bg-[#2A2A2A]">
+                    <td className="px-4 py-3">01/01/2024</td>
+                    <td className="px-4 py-3">09:00</td>
+                    <td className="px-4 py-3">17:00</td>
+                    <td className="px-4 py-3">8 שעות</td>
+                    <td className="px-4 py-3">
+                      <div className="flex space-x-2 rtl:space-x-reverse">
+                        <button className="text-blue-400 hover:text-blue-300">
+                          ערוך
+                        </button>
+                        <button className="text-red-400 hover:text-red-300">
+                          מחק
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>

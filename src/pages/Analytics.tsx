@@ -28,7 +28,7 @@ interface Project {
   id: string;
   name: string;
   budget: number;
-  status: 'לביצוע' | 'בביצוע' | 'הושלם';
+  status: 'לביצוע' | 'בתהליך' | 'הושלם';
   startDate: string;
   endDate: string;
   createdBy: string;
@@ -36,7 +36,7 @@ interface Project {
 
 interface Task {
   id: string;
-  status: 'לביצוע' | 'בביצוע' | 'הושלם';
+  status: 'לביצוע' | 'בתהליך' | 'הושלם';
   priority: 'נמוכה' | 'בינונית' | 'גבוהה';
   dueDate: string;
   createdBy: string;
@@ -66,10 +66,10 @@ const STATUS_CONFIG = {
     icon: <FaExclamationCircle className="text-red-500" />,
     label: 'לביצוע'
   },
-  'בביצוע': { 
+  'בתהליך': { 
     color: 'bg-yellow-100 text-yellow-800', 
     icon: <FaChartBar className="text-yellow-500" />,
-    label: 'בביצוע'
+    label: 'בתהליך'
   },
   'הושלם': { 
     color: 'bg-green-100 text-green-800', 
@@ -106,7 +106,7 @@ const Analytics: React.FC = () => {
 
   useEffect(() => {
     const projectsQuery = query(collection(db, 'projects'));
-    const tasksQuery = query(collection(db, 'tasks'));
+    const tasksQuery = query(collection(db, 'Tasks'));
     const customersQuery = query(collection(db, 'customers'));
     const usersQuery = query(collection(db, 'users'));
 

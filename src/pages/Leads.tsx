@@ -22,14 +22,13 @@ import {
   Alert,
   Stack,
   IconButton,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
   ThemeProvider,
   createTheme,
   CssBaseline,
   Grid,
+  MenuItem,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,6 +44,7 @@ import { leadService } from '../services/firebase/leadService';
 import { Lead } from '../types/schemas';
 import { useAuth } from '../contexts/AuthContext';
 import { v4 as uuidv4 } from 'uuid';
+import StyledSelect from '../components/StyledSelect';
 
 const LEADS_COLLECTION = 'leads';
 
@@ -386,19 +386,19 @@ const Leads: React.FC = () => {
 
           <FormControl sx={{ ml: 2, minWidth: 150 }}>
             <InputLabel id="filter-status-label">סטטוס</InputLabel>
-            <Select
+            <StyledSelect
               labelId="filter-status-label"
               id="filter-status"
               value={filterStatus}
               label="סטטוס"
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setFilterStatus(e.target.value)}
             >
               <MenuItem value="">הכל</MenuItem>
               <MenuItem value="חדש">חדש</MenuItem>
               <MenuItem value="בתהליך">בתהליך</MenuItem>
               <MenuItem value="הושלם">הושלם</MenuItem>
               <MenuItem value="לא רלוונטי">לא רלוונטי</MenuItem>
-            </Select>
+            </StyledSelect>
           </FormControl>
         </Paper>
 
@@ -565,16 +565,16 @@ const Leads: React.FC = () => {
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth margin="normal">
                     <InputLabel>סטטוס</InputLabel>
-                    <Select
+                    <StyledSelect
                       value={formData.status || 'חדש'}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
                       label="סטטוס"
+                      onChange={(e: { target: { value: string; }; }) => setFormData({ ...formData, status: e.target.value as Lead['status'] })}
                     >
                       <MenuItem value="חדש">חדש</MenuItem>
                       <MenuItem value="בתהליך">בתהליך</MenuItem>
                       <MenuItem value="הושלם">הושלם</MenuItem>
                       <MenuItem value="לא רלוונטי">לא רלוונטי</MenuItem>
-                    </Select>
+                    </StyledSelect>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={6}>

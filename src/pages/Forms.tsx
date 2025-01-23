@@ -1,33 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSnackbar } from 'notistack';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
   Button,
-  IconButton,
   TextField,
-  MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Chip,
-  CircularProgress,
-  Select,
   FormControl,
   InputLabel,
-  DialogContentText,
-  Stack,
+  MenuItem,
+  IconButton,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
 } from '@mui/material';
+import StyledSelect from '../components/StyledSelect';
 import {
   CloudUpload as UploadIcon,
   Delete as DeleteIcon,
@@ -65,9 +59,10 @@ import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { pdfjs } from 'react-pdf';
 import { storageService } from '../services/firebase/storageService';
+import { useSnackbar } from 'notistack';
 
 // Initialize PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
 
 // Add logging for debugging
 const logAuthState = (user: any) => {
@@ -707,29 +702,29 @@ const Forms: React.FC = () => {
         />
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>קטגוריה</InputLabel>
-          <Select
+          <StyledSelect
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
             label="קטגוריה"
+            onChange={(e) => setCategoryFilter(e.target.value)}
           >
             <MenuItem value="">הכל</MenuItem>
             {categories.map((category) => (
               <MenuItem key={category} value={category}>{category}</MenuItem>
             ))}
-          </Select>
+          </StyledSelect>
         </FormControl>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>סוג קובץ</InputLabel>
-          <Select
+          <StyledSelect
             value={fileTypeFilter}
-            onChange={(e) => setFileTypeFilter(e.target.value)}
             label="סוג קובץ"
+            onChange={(e) => setFileTypeFilter(e.target.value)}
           >
             <MenuItem value="all">הכל</MenuItem>
             <MenuItem value="document">מסמכים</MenuItem>
             <MenuItem value="image">תמונות</MenuItem>
             <MenuItem value="video">וידאו</MenuItem>
-          </Select>
+          </StyledSelect>
         </FormControl>
       </Box>
 
@@ -834,17 +829,17 @@ const Forms: React.FC = () => {
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel id="category-label">קטגוריה</InputLabel>
-              <Select
-                labelId="category-label"
+              <StyledSelect
                 value={selectedCategory}
-                label="קטגוריה"
+                label="Category"
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                dir="rtl"
               >
-                {categories.map((cat) => (
-                  <MenuItem key={cat} value={cat} dir="rtl">{cat}</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
                 ))}
-              </Select>
+              </StyledSelect>
             </FormControl>
             <Button
               component="label"
@@ -915,13 +910,13 @@ const Forms: React.FC = () => {
             />
             <FormControl fullWidth margin="dense">
               <InputLabel>סוג קובץ</InputLabel>
-              <Select
+              <StyledSelect
                 value={fileType}
                 onChange={(e) => setFileType(e.target.value as 'txt' | 'pdf')}
               >
                 <MenuItem value="txt">Text (.txt)</MenuItem>
                 <MenuItem value="pdf">PDF (.pdf)</MenuItem>
-              </Select>
+              </StyledSelect>
             </FormControl>
           </Stack>
         </DialogContent>

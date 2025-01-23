@@ -69,7 +69,7 @@ const ActivitiesWidget: React.FC<ActivitiesWidgetProps> = ({ preview = false, da
         },
         {
           id: '2',
-          type: 'customer',
+          type: 'update',
           title: 'Customer Updated',
           description: 'Profile updated for Jane Smith',
           timestamp: new Date(),

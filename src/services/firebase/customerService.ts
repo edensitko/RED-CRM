@@ -3,184 +3,166 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
-  updateDoc,
   query,
   where,
+  addDoc,
+  updateDoc,
+  setDoc,
+  Timestamp,
   orderBy,
   limit,
-  Timestamp,
-  DocumentData,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { Customer } from '../../types/schemas';
-import { activityService } from './activityService';
-import { v4 as uuidv4 } from 'uuid';
+import { CustomerClass } from '../../types/customer';
 
-const CUSTOMERS_COLLECTION = 'customers';
+const COLLECTION = 'Customers';
 
-const convertCustomerFromFirestore = (doc: DocumentData): Customer => {
+function convertCustomerFromFirestore(doc: DocumentData): CustomerClass {
   const data = doc.data();
   return {
-    ...data,
     id: doc.id,
-    createdAt: data.createdAt?.toDate() || new Date(),
-    updatedAt: data.updatedAt?.toDate() || new Date(),
-    lastContact: data.lastContact?.toDate() || null,
-    contracts: data.contracts?.map((contract: any) => ({
-      ...contract,
-      startDate: contract.startDate?.toDate() || new Date(),
-      endDate: contract.endDate?.toDate() || new Date(),
-    })) || [],
-    status: data.status || 'פעיל',
-    isDeleted: data.isDeleted || false,
+    name: data.Name || '',
+    lastName: data.LastName || '',
+    companyName: data.CompanyName || '',
+    assignedTo: data.AssignTo || [],
+    Balance: data.Balance || 0,
+    ComeFrom: data.ComeFrom || '',
+    Comments: data.Comments || [],
+    CreatedBy: data.CreatedBy || '',
+    createdAt: data.createdAt || new Date().toISOString(),
+    Email: data.Email || '',
+    IsDeleted: data.IsDeleted || false,
+    Links: data.Links || [],
+    Phone: data.Phone || 0,
+    Projects: data.Projects || [],
+    Status: data.Status || 'פעיל',
+    Tags: data.Tags || [],
+    Tasks: data.Tasks || [],
+    Files: data.Files || []
   };
-};
+}
+
+function convertCustomerToFirestore(customer: Partial<CustomerClass>) {
+  return { ...customer };
+}
+
+async function createCustomer(customer: Partial<CustomerClass>): Promise<string> {
+  const customerData = convertCustomerToFirestore(customer);
+  const docRef = await addDoc(collection(db, COLLECTION), customerData);
+  return docRef.id;
+}
+
+async function updateCustomer(id: string, updates: Partial<CustomerClass>): Promise<void> {
+  const customerRef = doc(db, COLLECTION, id);
+  const docSnap = await getDoc(customerRef);
+  
+  if (!docSnap.exists()) {
+    // If document doesn't exist, create it
+    await setDoc(customerRef, updates);
+  } else {
+    // If document exists, update it
+    await updateDoc(customerRef, updates);
+  }
+}
+
+async function getActiveCustomers(userId: string, maxResults?: number): Promise<CustomerClass[]> {
+  const customersRef = collection(db, COLLECTION);
+  const q = maxResults
+    ? query(
+        customersRef,
+        where('CreatedBy', '==', userId),
+        where('IsDeleted', '==', false),
+        orderBy('CompanyName'),
+        limit(maxResults)
+      )
+    : query(
+        customersRef,
+        where('CreatedBy', '==', userId),
+        where('IsDeleted', '==', false),
+        orderBy('CompanyName')
+      );
+
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertCustomerFromFirestore);
+}
+
+async function getAllCustomers(userId: string): Promise<CustomerClass[]> {
+  const customersRef = collection(db, COLLECTION);
+  const q = query(
+    customersRef,
+    where('CreatedBy', '==', userId),
+    orderBy('CompanyName')
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertCustomerFromFirestore);
+}
+
+async function getCustomersByStatus(userId: string, status: CustomerClass['Status']): Promise<CustomerClass[]> {
+  const customersRef = collection(db, COLLECTION);
+  const q = query(
+    customersRef,
+    where('CreatedBy', '==', userId),
+    where('Status', '==', status),
+    where('IsDeleted', '==', false)
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertCustomerFromFirestore);
+}
+
+async function getCustomer(userId: string, id: string): Promise<CustomerClass | null> {
+  const customerRef = doc(db, COLLECTION, id);
+  const customerDoc = await getDoc(customerRef);
+  
+  if (!customerDoc.exists()) return null;
+  
+  const customer = convertCustomerFromFirestore(customerDoc);
+  return customer.CreatedBy === userId ? customer : null;
+}
+
+async function deleteCustomer(id: string, deletedBy: string): Promise<void> {
+  try {
+    console.log('Attempting to delete customer with ID:', id);
+    
+    // First try to find the document by querying
+    const q = query(collection(db, COLLECTION), where('id', '==', id));
+    const querySnapshot = await getDocs(q);
+    
+    let customerRef;
+    if (!querySnapshot.empty) {
+      // If found by query, use that document reference
+      customerRef = querySnapshot.docs[0].ref;
+    } else {
+      // If not found by query, try direct reference
+      customerRef = doc(db, COLLECTION, id);
+      const docSnap = await getDoc(customerRef);
+      if (!docSnap.exists()) {
+        console.error('Customer document not found. Collection:', COLLECTION, 'ID:', id);
+        throw new Error('Customer not found');
+      }
+    }
+    
+    await updateDoc(customerRef, {
+      IsDeleted: true,
+      Status: 'לא פעיל',
+      deletedBy,
+      deletedAt: Timestamp.now()
+    });
+    console.log('Successfully marked customer as deleted');
+  } catch (error) {
+    console.error('Error in deleteCustomer:', error);
+    console.error('Collection:', COLLECTION);
+    console.error('Customer ID:', id);
+    throw error;
+  }
+}
 
 export const customerService = {
-  async createCustomer(customer: Customer): Promise<void> {
-    const customerRef = doc(db, CUSTOMERS_COLLECTION, customer.id);
-    await setDoc(customerRef, {
-      ...customer,
-      createdAt: Timestamp.fromDate(customer.createdAt),
-      updatedAt: Timestamp.fromDate(customer.updatedAt),
-      lastContact: customer.lastContact ? Timestamp.fromDate(customer.lastContact) : null,
-      contracts: customer.contracts?.map(contract => ({
-        ...contract,
-        startDate: Timestamp.fromDate(contract.startDate),
-        endDate: Timestamp.fromDate(contract.endDate),
-      })),
-      isDeleted: false,
-      status: 'פעיל',
-    });
-
-    await activityService.logActivity({
-      id: uuidv4(),
-      type: 'create',
-      entityType: 'customer',
-      entityId: customer.id,
-      description: 'יצירת לקוח חדש',
-      createdBy: customer.createdBy,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      updatedBy: customer.createdBy,
-      metadata: {
-        customerName: `${customer.firstName} ${customer.lastName}`,
-        company: customer.companyName,
-        status: customer.status,
-      },
-      completedAt: undefined,
-      dueDate: undefined
-    });
-  },
-
-  async updateCustomer(id: string, updates: Partial<Customer>): Promise<void> {
-    const customerRef = doc(db, CUSTOMERS_COLLECTION, id);
-    const updateData = {
-      ...updates,
-      updatedAt: Timestamp.fromDate(new Date()),
-      lastContact: updates.lastContact instanceof Date ? Timestamp.fromDate(updates.lastContact) : updates.lastContact,
-      contracts: updates.contracts?.map(contract => ({
-        ...contract,
-        startDate: Timestamp.fromDate(contract.startDate),
-        endDate: Timestamp.fromDate(contract.endDate),
-      })),
-    };
-    await updateDoc(customerRef, updateData);
-  },
-
-  async getActiveCustomers(userId: string, maxResults?: number): Promise<Customer[]> {
-    const baseQuery = query(
-      collection(db, CUSTOMERS_COLLECTION),
-      where('status', '==', 'פעיל'),
-      where('isDeleted', '==', false),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(baseQuery);
-    return querySnapshot.docs.map(convertCustomerFromFirestore);
-  },
-
-  async getAllCustomers(userId: string): Promise<Customer[]> {
-    console.log('Getting all customers for userId:', userId);
-    try {
-      // First try without orderBy to see if we get results
-      const baseQuery = query(
-        collection(db, CUSTOMERS_COLLECTION),
-        where('userId', '==', userId),
-        where('isDeleted', '==', false)
-      );
-      
-      console.log('Executing Firestore query...');
-      const querySnapshot = await getDocs(baseQuery);
-      console.log('Raw query results:', querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
-      const customers = querySnapshot.docs.map(convertCustomerFromFirestore);
-      console.log('Processed customers:', customers);
-      
-      // Sort in memory if we get results
-      return customers.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    } catch (error) {
-      console.error('Error in getAllCustomers:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', error.message);
-        console.error('Error stack:', error.stack);
-      }
-      throw error;
-    }
-  },
-
-  async getCustomersByStatus(userId: string, status: Customer['status']): Promise<Customer[]> {
-    const customersQuery = query(
-      collection(db, CUSTOMERS_COLLECTION),
-      where('status', '==', status),
-      where('userId', '==', userId),
-      where('isDeleted', '==', false)
-    );
-
-    const querySnapshot = await getDocs(customersQuery);
-    return querySnapshot.docs.map(convertCustomerFromFirestore);
-  },
-
-  async getCustomer(userId: string, id: string): Promise<Customer | null> {
-    const customerDoc = await getDoc(doc(db, CUSTOMERS_COLLECTION, id));
-    
-    if (!customerDoc.exists()) return null;
-    
-    const customerData = customerDoc.data();
-    if (customerData.userId !== userId) return null;
-    
-    return convertCustomerFromFirestore(customerDoc);
-  },
-
-  async deleteCustomer(id: string, deletedBy: string): Promise<void> {
-    const customerRef = doc(db, CUSTOMERS_COLLECTION, id);
-    
-    // Soft delete
-    await updateDoc(customerRef, {
-      isDeleted: true,
-      status: 'לא פעיל',
-      updatedAt: Timestamp.fromDate(new Date()),
-      updatedBy: deletedBy,
-    });
-
-    // Log deletion activity
-    await activityService.logActivity({
-      id: uuidv4(),
-      type: 'delete',
-      entityType: 'customer',
-      entityId: id,
-      description: 'מחיקת לקוח',
-      createdBy: deletedBy,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      updatedBy: deletedBy,
-      metadata: {
-        customerId: id,
-      },
-      completedAt: undefined,
-      dueDate: undefined
-    });
-  },
+  createCustomer,
+  updateCustomer,
+  getActiveCustomers,
+  getAllCustomers,
+  getCustomersByStatus,
+  getCustomer,
+  deleteCustomer
 };

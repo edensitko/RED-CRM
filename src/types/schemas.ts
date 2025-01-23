@@ -1,27 +1,47 @@
+import { Timestamp } from 'firebase/firestore';
+import { CustomerClass } from './customer';
+
+export type FirebaseDate = Date | Timestamp;
+
+export interface SubTask {
+  id: string;
+  title: string;
+  createdAt: any;
+  updatedAt: any;
+  createdBy: string;
+  urgency: string;
+  status: string;
+  dueDate: any;
+  description: string;
+  completed: boolean;
+}
 
 export interface BaseEntity {
   id: string;
-  createdAt: Date;
+  createdAt: any;
   createdBy: string;
-  updatedAt: Date;
+  updatedAt: any;
   updatedBy: string;
   isDeleted?: boolean;
-  deletedAt?: Date;
+  deletedAt?: FirebaseDate;
   deletedBy?: string;
 }
 
 export interface User extends BaseEntity {
   email: string;
-  firstName: string;
-  lastName: string;
-  role: 'user' | 'admin';
-  phoneNumber: string;
-  isActive: boolean;
-  lastLogin?: Date;
-  avatar?: string;
+  name: string;
+  role: 'admin' | 'user' | 'manager';
+  createdAt: Date | string;
+  lastLogin: Date | string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  profilePicture?: string;
   department?: string;
+  isActive?: boolean;
+  displayName?: string;
+  avatar?: string;
   position?: string;
-  hireDate: Date;
   preferences: {
     language: 'he' | 'en';
     theme: 'light' | 'dark';
@@ -52,89 +72,97 @@ export interface AdminUser extends User {
 }
 
 export interface Task extends BaseEntity {
+  tasks: never[];
+  files: never[];
+  links: never[];
+  isFavorite: boolean;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high';
-  dueDate?: Date;
-  assignedTo: string;
-  relatedTo?: {
-    type: 'customer' | 'lead';
+  status: 'לביצוע' | 'בתהליך' | 'הושלם';
+  urgency: 'נמוכה' | 'בינונית' | 'גבוהה';
+  repeat?: 'none' | 'daily' | 'weekly' | 'monthly';
+  dueDate?: Timestamp | null;
+  assignedTo: string[];
+  projectId?: string;
+  project?: {
     id: string;
+    name: string;
+    status: string;
+    budget: number;
+    createdAt: Timestamp;
+    customerId: string;
+    description: string;
+    endDate: Timestamp;
+    isFavorite: boolean;
+    startDate: string;
+  } | null;
+  customers?: TaskCustomer[];
+  subTasks?: SubTask[];
+  comments?: Array<{
+    id: string;
+    text: string;
+    createdAt: Timestamp;
+    createdBy: string;
+    user?: {
+      id: string;
+      name: string;
+    };
+  }>;
+  completed?: boolean;
+  completedAt?: Timestamp | null;
+  isDeleted?: boolean;
+}
+
+export interface Project extends BaseEntity {
+  name: string;
+  description: string;
+  customerId: string;
+  customer?: {
+    id: string;
+    name: string;
+    companyName: string;
+    email: string;
+    phone: string;
   };
-  category: 'meeting' | 'call' | 'email' | 'follow_up' | 'other';
-  reminderDate?: Date;
-  completedAt?: Date;
-  completedBy?: string;
-  attachments?: Array<{
+  userId: string;
+  projectManager: string;
+  status: 'לביצוע' | 'בתהליך' | 'הושלם';
+  startDate: string;
+  endDate: string;
+  budget: number;
+  isFavorite: boolean;
+  links: string[];
+  comments: Array<{
+    text: string;
+    createdAt: string;
+    userId: string;
+    user?: {
+      id: string;
+      name: string;
+    };
+  }>;
+  files?: Array<{
+    id: string;
     name: string;
     url: string;
     type: string;
     size: number;
-    uploadedAt: Date;
-    uploadedBy: string;
-  }>;
-  comments?: Array<{
-    id: string;
-    text: string;
-    createdAt: Date;
-    createdBy: string;
-    isEdited: boolean;
-  }>;
-}
-
-export interface Customer extends BaseEntity {
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  companyName: string;
-  status: 'פעיל' | 'לא פעיל';
-  source: string;
-  notes: string;
-  tags: string[];
-  lastContact?: Date;
-  website?: string;
-  industry?: string;
-  size?: 'small' | 'medium' | 'large';
-  annualRevenue?: number;
-  paymentTerms?: string;
-  contracts?: Array<{
-    id: string;
-    startDate: Date;
-    endDate: Date;
-    type: string;
-    value: number;
-    status: 'פעיל' | 'נגמר' | 'הושבת';
-  }>;
-  socialMedia?: {
-    linkedin?: string;
-    facebook?: string;
-    twitter?: string;
-  };
-  contacts?: Array<{
-    id: string;
-    name: string;
-    position: string;
-    email: string;
-    phone: string;
-    isPrimary: boolean;
-  }>;
-  documents?: Array<{
-    id: string;
-    type: 'contract' | 'invoice' | 'proposal' | 'other';
-    name: string;
-    url: string;
-    createdAt: Date;
+    createdAt: string;
     createdBy: string;
   }>;
-  preferredContactMethod?: 'email' | 'phone' | 'whatsapp';
-  marketingPreferences?: {
-    newsletter: boolean;
-    promotions: boolean;
-    updates: boolean;
-  };
+  tasks?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    dueDate: string;
+    assignedTo: string;
+    assignedUser?: {
+      id: string;
+      name: string;
+    };
+  }>;
 }
 
 export interface Lead extends BaseEntity {
@@ -149,7 +177,7 @@ export interface Lead extends BaseEntity {
   notes: string;
   estimatedValue: number;
   assignedTo: string;
-  lastContact?: Date;
+  lastContact?: FirebaseDate;
   tags: string[];
   industry?: string;
   budget?: number;
@@ -158,7 +186,7 @@ export interface Lead extends BaseEntity {
   competitors?: string[];
   meetings?: Array<{
     id: string;
-    date: Date;
+    date: FirebaseDate;
     type: 'phone' | 'video' | 'in_person';
     summary: string;
     outcome?: string;
@@ -173,19 +201,6 @@ export interface Lead extends BaseEntity {
   referralSource?: string;
 }
 
-export interface Project {
-  id: string;
-  name: string;
-  description: string;
-  customerId: string;
-  status: 'planning' | 'in_progress' | 'completed';
-  startDate: string;
-  endDate: string;
-  budget: number;
-  createdAt: string;
-  isFavorite?: boolean;
-}
-
 export interface Report extends BaseEntity {
   title: string;
   type: 'sales' | 'leads' | 'performance' | 'customer' | 'custom';
@@ -194,8 +209,8 @@ export interface Report extends BaseEntity {
   schedule?: {
     frequency: 'daily' | 'weekly' | 'monthly';
     recipients: string[];
-    lastRun?: Date;
-    nextRun?: Date;
+    lastRun?: FirebaseDate;
+    nextRun?: FirebaseDate;
     format: 'pdf' | 'excel' | 'csv';
     timezone: string;
   };
@@ -207,7 +222,7 @@ export interface Report extends BaseEntity {
   exportHistory?: Array<{
     id: string;
     format: 'pdf' | 'excel' | 'csv';
-    downloadedAt: Date;
+    downloadedAt: FirebaseDate;
     downloadedBy: string;
     fileSize: number;
     url: string;
@@ -232,6 +247,62 @@ export interface Activity extends BaseEntity {
   metadata?: Record<string, any>;
   ip?: string;
   userAgent?: string;
-  completedAt?: Date;
-  dueDate?: Date;
+  completedAt?: FirebaseDate;
+  dueDate?: FirebaseDate;
 }
+
+export interface Item extends BaseEntity {
+  name: string;
+  description: string;
+  status: string;
+  projectId?: string;
+  project?: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  assignedTo?: string;
+  assignedUser?: {
+    id: string;
+    name: string;
+  };
+  dueDate?: FirebaseDate;
+  priority?: 'low' | 'medium' | 'high';
+  tags?: string[];
+  attachments?: Array<{
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+    uploadedAt: FirebaseDate;
+    uploadedBy: string;
+  }>;
+}
+
+export interface TaskCustomer {
+  id: string;
+  name: string;  
+  lastName: string;
+  companyName: string;  
+  assignedTo: string[];
+  Balance: number;
+  ComeFrom: string;
+  Comments: string[];
+  CreatedBy: string;
+  createdAt: string;
+  Email: string;
+  IsDeleted: boolean;
+  LastName: string;
+  Links: Array<string | { url: string; description: string }>;
+  Phone: number;
+  Projects: string[];
+  Status: "פעיל" | "לא פעיל" | "בטיפול";
+  Tags: string[];
+  Tasks: string[];
+  Files: Array<{ name: string; url: string; uploadedAt: string; size: number }>;
+}
+
+export type Customer = {
+  name: string;
+  companyName: string;
+} & CustomerClass;

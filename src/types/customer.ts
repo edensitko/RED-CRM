@@ -1,25 +1,21 @@
-export interface Customer {
+export interface CustomerClass {
   id: string;
-  firstName: string;
+  name: string;  
   lastName: string;
-  email: string;
-  phone: string;
-  companyName: string;
-  industry: string;
-  status: string;
-  size: string;
-  annualRevenue: number;
-  website: string;
-  source: string;
-  paymentTerms: string;
-  notes: string;
-  isDeleted: boolean;
-  lastContact: Date;
-  contracts: any[];
-  tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
-  updatedBy: string;
-  userId: string;
+  companyName: string;  
+  assignedTo: string[];
+  Balance: number;
+  ComeFrom: string;
+  Comments: string[];
+  CreatedBy: string;
+  createdAt: string;
+  Email: string;
+  IsDeleted: boolean;
+  Links: Array<string | { url: string; description: string }>;
+  Phone: number;
+  Projects: string[];
+  Status: "פעיל" | "לא פעיל" | "בטיפול";
+  Tags: string[];
+  Tasks: string[];
+  Files: Array<{ name: string; url: string; uploadedAt: string; size: number }>;
 }

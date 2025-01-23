@@ -202,10 +202,10 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, buttonPosition }
           }}
           className="bg-white shadow-2xl flex flex-col z-50 overflow-hidden"
         >
-          <div className="p-2 border-b flex flex-row-reverse justify-between items-center bg-red-500 text-white rounded-t-lg shadow-sm" dir="rtl">
+          <div className="p-2 border-b flex flex-row-reverse justify-between items-center bg-[#ec5252] text-white rounded-t-lg shadow-sm" dir="rtl">
             <button
               onClick={onClose}
-              className="p-1 hover:bg-red-600 text-red-500 hover:text-white rounded-full transition-colors"
+              className="p-1 hover:bg-red-600 text-[#ec5252] hover:text-white rounded-full transition-colors"
             >
               <FaTimes className="w-5 h-5" />
             </button>
@@ -235,7 +235,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, buttonPosition }
               />
               <button
                 type="submit"
-                className={`p-2 bg-red-500 text-white rounded-lg transition-colors ${
+                className={`p-2 bg-[#ec5252] text-white rounded-lg transition-colors ${
                   isSending ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-600'
                 }`}
                 disabled={isSending}

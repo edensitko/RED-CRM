@@ -7,15 +7,15 @@ interface AdminRouteProps {
 }
 
 export default function AdminRoute({ children }: AdminRouteProps) {
-  const { user, userRole, loading } = useAuth();
+  const { currentUser, userRole, loading } = useAuth();
   const location = useLocation();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && currentUser) {
       setIsChecking(false);
     }
-  }, [loading, user]);
+  }, [loading, currentUser]);
 
   if (loading || isChecking) {
     return (
@@ -25,7 +25,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
     );
   }
 
-  if (!user || userRole !== 'admin') {
+  if (!currentUser || userRole !== 'admin') {
     // If not admin, redirect to home page
     return <Navigate to="/" state={{ from: location }} replace />;
   }

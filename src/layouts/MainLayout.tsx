@@ -9,24 +9,48 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  IconButton
+  IconButton,
+  Tooltip,
+  ThemeProvider,
+  createTheme
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
+import PublicIcon from '@mui/icons-material/Public';
+import SettingsIcon from '@mui/icons-material/Settings';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import SearchIcon from '@mui/icons-material/Search';
+import MenuIcon from '@mui/icons-material/Menu';
 
 import NavigationSidebar from '../components/NavigationSidebar';
 import Sidebar from '../components/Sidebar';
 import FloatingChatButton from '../components/FloatingChatButton';
-import { NotesProvider } from '../contexts/NotesContext';
 import { useAuth } from '../hooks/useAuth';
 import LogoImage from '../assets/logo.jpg';
+import { CacheProvider } from '@emotion/react';
+import { cacheRtl } from '../theme/rtl';
 
-const Logo = styled('img')(({ theme }) => ({
-  width: 50,
-  height: 50,
-  borderRadius: '50%',
-  objectFit: 'cover',
-}));
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#ef4444', // red color
+    },
+    secondary: {
+      main: '#64748b', // slate-500
+    },
+    background: {
+      default: '#0A0A0A', // darker than black
+      paper: '#141414', // slightly lighter black for cards
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: '#94A3B8', // slate-400
+    },
+    divider: '#1F2937', // gray-800
+  },
+  direction: 'rtl',
+});
 
 const MainLayoutRoot = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -35,37 +59,48 @@ const MainLayoutRoot = styled('div')(({ theme }) => ({
   width: '100vw',
   overflow: 'hidden',
   direction: 'rtl',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+}));
+
+const TopBar = styled('header')(({ theme }) => ({
+  height: '64px',
+  backgroundColor: theme.palette.background.default,
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 1.5rem',
+  justifyContent: 'space-between',
 }));
 
 const MainContent = styled('main')(({ theme }) => ({
-  flexGrow: 1,
   display: 'flex',
-  width: '100%',
-  height: 'calc(100vh - 64px)', // Subtract header height
-  overflowY: 'hidden',
   flexDirection: 'row-reverse',
+  flex: 1,
+  overflow: 'hidden',
 }));
 
-const SidebarContainer = styled(Box)(({ theme }) => ({
+const SidebarContainer = styled('aside')(({ theme }) => ({
   width: '12%',
   height: '100%',
-  overflowY: 'auto',
-  borderLeft: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.default,
+  display: 'flex',
+  flexDirection: 'column',
+  padding: '1rem',
 }));
 
-const ContentContainer = styled(Box)(({ theme }) => ({
-  width: '76%', // 100% - (2 * 12%)
+const ContentArea = styled('div')(({ theme }) => ({
+  flex: 1,
   height: '100%',
-  overflowY: 'auto',
-  backgroundColor: theme.palette.background.default,
-  padding: theme.spacing(3),
-  '& > *': {
-    minHeight: '100%'
-  }
+  backgroundColor: theme.palette.background.paper,
+  overflow: 'auto',
+  padding: '10px',
+  margin: '10px',
+  borderRadius: 30,
 }));
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -87,99 +122,74 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const handleSettings = () => {
-    // Navigate to settings page or open settings modal
+    // open the modal page in modal 
+    navigate('/settings');
     handleUserMenuClose();
   };
 
   return (
-    <NotesProvider>
-      <MainLayoutRoot>
-        <CssBaseline />
-        
-        {/* Full-width Sticky Header */}
-        <MuiAppBar 
-          position="sticky"
-          elevation={1}
-          sx={{ 
-            zIndex: theme.zIndex.drawer + 1,
-            width: '100%',
-            backgroundColor: theme.palette.background.paper,
-            color: theme.palette.text.primary,
-          }}
-        >
-          <Toolbar 
-            sx={{ 
-              justifyContent: 'space-between', 
-              minHeight: '64px !important', 
-              px: 3, 
-              py: 1,
-              flexDirection: 'row', 
-            }}
-          >
-            <Logo 
-              src={LogoImage} 
-              alt="Company Logo" 
-            />
-            
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography sx={{ mr: 2 }}>
-                {user?.displayName || 'User'}
-              </Typography>
-              <IconButton onClick={handleUserMenuOpen}>
-                <Avatar
-                  src={user?.photoURL || undefined}
-                  alt={user?.displayName || undefined}
-                  sx={{ 
-                    width: 32, 
-                    height: 32, 
+    <CacheProvider value={cacheRtl}>
+      <ThemeProvider theme={darkTheme}>
+        <Box sx={{ display: 'flex', direction: 'rtl' }}>
+          <CssBaseline />
+          <MainLayoutRoot>
+            <TopBar>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <img src={LogoImage} alt="Logo" style={{ height: '40px' }} />
+              
+                <Link to="/">
+
+                </Link>
+                <Tooltip title="חזרה לדף הבית">
+                  <IconButton onClick={() => navigate('/')}>
+                    <PublicIcon />
+                  </IconButton>
+                </Tooltip>
+                
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <IconButton>
+                  <SearchIcon />
+                </IconButton>
+                <IconButton>
+                  <NotificationsIcon />
+                </IconButton>
+                <IconButton onClick={handleUserMenuOpen}>
+                  <SettingsIcon />
+                </IconButton>
+                <Avatar sx={{ width: 32, height: 32 }} src={user?.photoURL || undefined} alt={user?.displayName || undefined} />
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleUserMenuClose}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
                   }}
-                />
-              </IconButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleUserMenuClose}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'right',
-                }}
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
-              >
-                <MenuItem onClick={handleSettings}>הגדרות</MenuItem>
-                <MenuItem onClick={handleLogout}>התנתק</MenuItem>
-              </Menu>
-            </Box>
-          </Toolbar>
-        </MuiAppBar>
-
-        {/* Main Content Area */}
-        <MainContent>
-          {/* Right Navigation Sidebar (12%) */}
-          <SidebarContainer>
-            <NavigationSidebar />
-          </SidebarContainer>
-
-          {/* Central Content Area (76%) */}
-          <ContentContainer>
-            {children}
-          </ContentContainer>
-
-          {/* Left Notes Sidebar (12%) */}
-          <SidebarContainer 
-            sx={{ 
-              borderRight: `1px solid ${theme.palette.divider}`,
-              borderLeft: 'none' 
-            }}
-          >
-            <Sidebar />
-          </SidebarContainer>
-        </MainContent>
-        <FloatingChatButton />
-      </MainLayoutRoot>
-    </NotesProvider>
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                >
+                  <MenuItem onClick={handleSettings}>הגדרות</MenuItem>
+                  <MenuItem onClick={handleLogout}>התנתק</MenuItem>
+                </Menu>
+              </div>
+            </TopBar>
+            <MainContent>
+              <SidebarContainer>
+                <NavigationSidebar />
+              </SidebarContainer>
+              <ContentArea>
+                {children}
+              </ContentArea>
+            
+            </MainContent>
+            <FloatingChatButton />
+          </MainLayoutRoot>
+        </Box>
+      </ThemeProvider>
+    </CacheProvider>
   );
 };
 

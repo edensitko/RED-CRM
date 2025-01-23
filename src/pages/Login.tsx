@@ -38,6 +38,12 @@ const rtlTheme = createTheme({
   palette: {
     primary: {
       main: '#ff4d4d',
+      dark: '#ff6b6b',
+      light: 'rgba(255,77,77,0.1)',
+    },
+    background: {
+      paper: 'rgba(255,255,255,0.9)',
+      default: 'rgba(255,255,255,0.8)',
     },
   },
   components: {
@@ -52,7 +58,7 @@ const rtlTheme = createTheme({
               borderColor: '#ff4d4d',
             },
             backgroundColor: 'white',
-            borderRadius: '15px',
+            borderRadius: 3,
             boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
           },
         },
@@ -129,7 +135,7 @@ const Login: React.FC = () => {
       <CssBaseline />
       <Box 
         sx={{ 
-          backgroundColor: '#ff4d4d', 
+          backgroundColor: 'primary.main', 
           height: '100vh', 
           width: '100vw',
           display: 'flex', 
@@ -146,13 +152,13 @@ const Login: React.FC = () => {
         <Paper 
           elevation={10}
           sx={{
-            width: '100%', 
-            maxWidth: '450px', 
-            borderRadius: '20px', 
-            padding: '30px',
-            backgroundColor: 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(10px)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+            p: 3,
+            backgroundColor: 'background.paper',
+            borderRadius: 3,
+            boxShadow: 1,
+            width: '100%',
+            maxWidth: 400,
+            mx: 'auto'
           }}
         >
           <Box 
@@ -168,7 +174,7 @@ const Login: React.FC = () => {
               alt="לוגו" 
               style={{ 
                 maxWidth: '150px', 
-                borderRadius: '50%', 
+                borderRadius: 3, 
                 boxShadow: '0 6px 12px rgba(0,0,0,0.2)', 
                 marginBottom: '10px',
                 objectFit: 'contain'
@@ -178,7 +184,7 @@ const Login: React.FC = () => {
               variant="h4" 
               component="h1" 
               sx={{ 
-                color: '#ff4d4d', 
+                color: 'primary.main', 
                 fontWeight: 'bold',
                 textAlign: 'center',
                 marginBottom: '20px'
@@ -285,17 +291,12 @@ const Login: React.FC = () => {
                 disabled={loading}
                 fullWidth
                 sx={{
-                  backgroundColor: '#ff4d4d', 
-                  color: 'white', 
-                  '&:hover': { 
-                    backgroundColor: '#ff6b6b' 
-                  },
-                  padding: '15px',
-                  borderRadius: '15px',
-                  fontWeight: 'bold',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                  marginTop: '10px',
-                  transition: 'all 0.3s ease'
+                  width: '100%',
+                  backgroundColor: 'primary.main', 
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark'
+                  }
                 }}
               >
                 {loading ? 'טוען...' : (isSignup ? 'הירשם' : 'התחבר')}
@@ -306,10 +307,10 @@ const Login: React.FC = () => {
                 onClick={() => setIsSignup(!isSignup)}
                 fullWidth
                 sx={{
-                  color: '#ff4d4d',
+                  color: 'primary.main',
                   marginTop: '10px',
                   '&:hover': { 
-                    backgroundColor: 'rgba(255,77,77,0.1)',
+                    backgroundColor: 'primary.light',
                   }
                 }}
               >
@@ -325,7 +326,7 @@ const Login: React.FC = () => {
                 sx={{
                   backgroundColor: 'white', 
                   color: '#4285F4', 
-                  '&:hover': { backgroundColor: '#f0f0f0' },
+                  '&:hover': { backgroundColor: 'background.default' },
                   padding: '15px',
                   borderRadius: '15px',
                   fontWeight: 'bold',

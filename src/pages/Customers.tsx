@@ -22,7 +22,6 @@ import {
   Alert,
   Stack,
   IconButton,
-  Select,
   MenuItem,
   FormControl,
   InputLabel,
@@ -38,6 +37,11 @@ import {
   createTheme,
   CssBaseline,
   Fade,
+  SvgIcon,
+  Tabs,
+  Tab,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -49,53 +53,80 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   Person as PersonIcon,
   NoteAdd as NoteAddIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Error as ErrorIcon,
+  Warning as WarningIcon,
+  HourglassEmpty as HourglassEmptyIcon,
+  NewReleases as NewReleasesIcon,
+  ContactMail as ContactMailIcon,
+  Business as BusinessIcon,
+  Assignment as AssignmentIcon,
+  Event as EventIcon,
+  Notes,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { customerService } from '../services/firebase/customerService'; 
-import { Customer } from '../types/schemas';
+import { customerService } from '../services/firebase/customerService';
+import { projectService } from '../services/firebase/projectService';
+import { taskService } from '../services/firebase/taskService';
+import {  Project, Task } from '../types/schemas';
 import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
+import { CustomerClass } from '../types/customer';
 import { 
   collection, 
   query, 
-  where, 
-  getDocs 
+  where,
+  getDocs,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  Timestamp,
+  getDoc,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import ItemModal from '../components/modals/ItemModal';
+import CustomerDetails from '../components/CustomerDetails';
+import StyledSelect from '../components/StyledSelect';
+import { CacheProvider } from '@emotion/react';
+import rtlPlugin from 'stylis-plugin-rtl';
+import { prefixer } from 'stylis';
+import createCache from '@emotion/cache';
+import { format, subDays, subMonths, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { he } from 'date-fns/locale';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import { DateRangePicker } from '@mui/x-date-pickers-pro/DateRangePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { heIL } from '@mui/x-date-pickers/locales';
 
-const CUSTOMERS_COLLECTION = 'customers'; 
+const CUSTOMERS_COLLECTION = 'Customers';
 
-// LTR Theme with Red Palette
-const ltrTheme = createTheme({
-  direction: 'ltr',
-  palette: {
-    primary: {
-      main: '#d32f2f',
-      contrastText: '#ffffff',
-    },
-    secondary: {
-      main: '#ff1744',
-    },
-    background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#333333',
-      secondary: '#666666',
-    },
-  },
+const cacheRtl = createCache({
+  key: 'muirtl',
+  stylisPlugins: [prefixer, rtlPlugin],
+});
+
+const rtlTheme = createTheme({
+  direction: 'rtl',
   typography: {
-    fontFamily: [
-      'Rubik',
-      '-apple-system',
-      'BlinkMacSystemFont',
-      '"Segoe UI"',
-      'Roboto',
-      '"Helvetica Neue"',
-      'Arial',
-      'sans-serif',
-    ].join(','),
+    fontFamily: 'Rubik, Arial, sans-serif',
     h4: {
       fontWeight: 600,
     },
@@ -107,10 +138,17 @@ const ltrTheme = createTheme({
     },
   },
   components: {
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          textAlign: 'right',
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 3,
         },
       },
     },
@@ -118,8 +156,9 @@ const ltrTheme = createTheme({
       styleOverrides: {
         root: {
           padding: '16px',
-          borderRadius: 12,
-          boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+          borderRadius: 3,
+          boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
+          backgroundColor: '#141414',
         },
       },
     },
@@ -127,8 +166,8 @@ const ltrTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiInputBase-root': {
-            borderRadius: 8,
-            direction: 'ltr',
+            borderRadius: 3,
+            direction: 'rtl',
           },
         },
       },
@@ -137,43 +176,158 @@ const ltrTheme = createTheme({
       styleOverrides: {
         root: {
           padding: '12px 16px',
-          borderRadius: 8,
+          borderRadius: 3,
           transition: 'background-color 0.3s',
           '&:hover': {
-            backgroundColor: 'rgba(211, 47, 47, 0.08)',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
           },
         },
       },
     },
   },
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#ef4444',
+    },
+    secondary: {
+      main: '#64748b',
+    },
+    background: {
+      default: '#0A0A0A',
+      paper: '#141414',
+    },
+    text: {
+      primary: '#ffffff',
+    },
+  },
 });
 
 import { styled } from '@mui/material/styles';
+import { FaBuilding, FaInfoCircle, FaLink, FaUser, FaTimes, Fa500Px, FaPlus } from 'react-icons/fa';
 
 const AnimatedDialog = styled(Dialog)`
   & .MuiDialog-paper {
-    direction: ltr;
-    text-align: center;
-    background-color: #ffffff;
-    padding: 32px;
-    border-radius: 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    border: 1px solid #d32f2f;
+    direction: rtl;
+    background-color: #141414;
+    border-radius: 12px;
+    padding: 0;
+    max-width: 1000px;
+    width: 100%;
+    margin: 16px;
   }
 `;
 
+const TabPanel = styled(Box)`
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 16px;
+`;
+
+const StyledTab = styled(Tab)`
+  color: #ffffff;
+  &.Mui-selected {
+    color: #ff1744;
+  }
+`;
+
+// Status configurations
+type StatusConfigType = {
+  [key: string]: {
+    color: 'default' | 'success' | 'error' | 'warning' | 'primary' | 'secondary' | 'info';
+    icon: React.ComponentType;
+  };
+};
+
+const statusConfig: StatusConfigType = {
+  'פעיל': {
+    color: 'success',
+    icon: CheckCircleIcon,
+  },
+  'לא פעיל': {
+    color: 'error',
+    icon: CancelIcon,
+  },
+  'בהמתנה': {
+    color: 'warning',
+    icon: HourglassEmptyIcon,
+  },
+  'חדש': {
+    color: 'info',
+    icon: NewReleasesIcon,
+  },
+};
+
+const priorityConfig = {
+  high: {
+    color: '#f44336',
+    icon: ErrorIcon,
+    backgroundColor: '#ffebee',
+    label: 'דחוף'
+  },
+  medium: {
+    color: '#ff9800',
+    icon: WarningIcon,
+    backgroundColor: '#fff3e0',
+    label: 'בינוני'
+  },
+  low: {
+    color: '#4caf50',
+    icon: CheckCircleIcon,
+    backgroundColor: '#e8f5e9',
+    label: 'רגיל'
+  }
+};
+
+const columns = [
+  { id: 'firstName', label: 'שם פרטי' },
+  { id: 'lastName', label: 'שם משפחה' },
+  { id: 'email', label: 'אימייל' },
+  { id: 'phone', label: 'טלפון' },
+  { id: 'companyName', label: 'חברה' },
+  { id: 'status', label: 'סטטוס' },
+  { id: 'source', label: 'מקור' },
+  { id: 'annualRevenue', label: 'הכנסה שנתית' },
+  { id: 'lastContact', label: 'קשר אחרון' },
+];
+
 const Customers: React.FC = () => {
-  const { user, signOut } = useAuth();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const { user } = useAuth();
+  const [customers, setCustomers] = useState<CustomerClass[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [filteredCustomers, setFilteredCustomers] = useState<CustomerClass[]>([]);
+  const [projects, setProjects] = useState<Record<string, Project>>({});
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortColumn, setSortColumn] = useState<keyof Customer | null>(null);
+  const [sortColumn, setSortColumn] = useState<keyof CustomerClass | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterStatus, setFilterStatus] = useState('');
-  const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [openViewDialog, setOpenViewDialog] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerClass | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
+  id:'',
+  assignedTo: [],
+  Balance: 0,
+  ComeFrom: '',
+  Comments: [],
+  CompanyName:'',
+  CreatedBy: '',
+  createdAt: '',
+  Email: '',
+  IsDeleted: false,
+  LastName: '',
+  Links: [],
+  Name: '',
+  Phone: 0,
+  Projects: [],
+  Status: "פעיל" ,
+  Tags: [],
+  Tasks: [],
+  });
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -183,25 +337,61 @@ const Customers: React.FC = () => {
     message: '',
     severity: 'success',
   });
-  const [formData, setFormData] = useState<Partial<Customer>>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    companyName: '',
-    status: 'פעיל',
-    source: '',
-    notes: '',
-    tags: [],
-    lastContact: new Date(),
-    website: '',
-    industry: '',
-    size: 'small',
-    annualRevenue: 0,
-    paymentTerms: '',
+
+  const [statistics, setStatistics] = useState({
+    totalCustomers: 0,
+    newLastWeek: 0,
+    newLastMonth: 0,
+    totalBalance: 0,
+    expectedBalance: 0,
+    customersByStatus: [] as { name: string; value: number }[],
+    customersBySource: [] as { name: string; value: number }[],
+    revenueData: [] as { date: string; amount: number }[],
+    growthData: [] as { date: string; customers: number }[]
   });
-  const [notes, setNotes] = useState<string>('');
-  const [openNoteDialog, setOpenNoteDialog] = useState(false);
+
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [dateRangeType, setDateRangeType] = useState<'week' | 'month' | 'custom'>('week');
+
+  const handleAddCustomer = async (customer: CustomerClass) => {
+    try {
+      const newCustomer = {
+        ...customer,
+        id: uuidv4(), // Generate new ID for new customer
+        CreatedBy: user?.uid,
+        IsDeleted: false,
+        createdAt: new Date().toISOString(),
+      };
+      await customerService.createCustomer(newCustomer);
+      showSnackbar('הלקוח נוסף בהצלחה');
+    } catch (error) {
+      console.error('Error adding customer:', error);
+      showSnackbar('שגיאה בהוספת הלקוח', 'error');
+    }
+  };
+
+  const handleEditCustomer = async (customer: CustomerClass) => {
+    try {
+      const updatedCustomer = {
+        ...customer,
+        updatedAt: new Date().toISOString(),
+      };
+      await customerService.updateCustomer(customer.id, updatedCustomer);
+      showSnackbar('הלקוח עודכן בהצלחה');
+    } catch (error) {
+      console.error('Error updating customer:', error);
+      showSnackbar('שגיאה בעדכון הלקוח', 'error');
+    }
+  };
+
+  const handleEditClick = (customer: CustomerClass) => {
+    setSelectedCustomer(customer);
+    setIsEditModalOpen(true);
+  };
+
+  const handleAddNewCustomer = () => {
+    setIsAddingNew(true);
+  };
 
   useEffect(() => {
     console.log('Checking Firebase connection...');
@@ -210,8 +400,83 @@ const Customers: React.FC = () => {
       user: user?.uid,
       isAuthenticated: !!user 
     });
-    fetchCustomers();
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('Setting up customers listener');
+    const customersRef = collection(db, CUSTOMERS_COLLECTION);
+    const q = query(
+      customersRef,
+      where('IsDeleted', '==', false)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const customersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as CustomerClass[];
+      
+      setCustomers(customersData);
+      setFilteredCustomers(customersData);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error in customers snapshot:', error);
+      showSnackbar('שגיאה בטעינת הלקוחות', 'error');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    const now = new Date();
+    let startDate: Date;
+    let endDate = endOfDay(now);
+
+    if (dateRangeType === 'week') {
+      startDate = startOfDay(subDays(now, 7));
+    } else if (dateRangeType === 'month') {
+      startDate = startOfDay(subMonths(now, 1));
+    } else {
+      startDate = dateRange[0] ? startOfDay(dateRange[0]) : startOfDay(subDays(now, 7));
+      endDate = dateRange[1] ? endOfDay(dateRange[1]) : endOfDay(now);
+    }
+
+    const newStats = {
+      totalCustomers: customers.length,
+      newLastWeek: customers.filter(c => {
+        const date = parseISO(c.createdAt);
+        return date >= startDate && date <= endDate;
+      }).length,
+      newLastMonth: customers.filter(c => parseISO(c.createdAt) > startDate).length,
+      totalBalance: customers.reduce((sum, c) => sum + (c.Balance || 0), 0),
+      expectedBalance: customers.reduce((sum, c) => sum + (c.Balance || 0), 0),
+      customersByStatus: Object.entries(
+        customers.reduce((acc, customer) => {
+          acc[customer.Status] = (acc[customer.Status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      ).map(([name, value]) => ({ name, value })),
+      customersBySource: Object.entries(
+        customers.reduce((acc, customer) => {
+          acc[customer.ComeFrom || 'אחר'] = (acc[customer.ComeFrom || 'אחר'] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      ).map(([name, value]) => ({ name, value })),
+      revenueData: Array.from({ length: 7 }).map((_, i) => ({
+        date: format(subDays(endDate, 6 - i), 'MM/dd'),
+        amount: Math.floor(Math.random() * 10000)
+      })),
+      growthData: Array.from({ length: 7 }).map((_, i) => ({
+        date: format(subDays(endDate, 6 - i), 'MM/dd'),
+        customers: Math.floor(Math.random() * 100)
+      }))
+    };
+
+    setStatistics(newStats);
+  }, [customers, dateRangeType, dateRange]);
 
   useEffect(() => {
     let filtered = [...customers];
@@ -219,15 +484,15 @@ const Customers: React.FC = () => {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter((customer) =>
-        Object.values(customer).some((value) =>
-          value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        Object.entries(customer).some(([_, value]) =>
+          value !== null && value !== undefined ? value.toString().toLowerCase().includes(searchTerm.toLowerCase()) : false
         )
       );
     }
 
     // Status filter
     if (filterStatus) {
-      filtered = filtered.filter((customer) => customer.status === filterStatus);
+      filtered = filtered.filter((customer) => customer.Status === filterStatus);
     }
 
     // Sorting
@@ -245,7 +510,7 @@ const Customers: React.FC = () => {
     setFilteredCustomers(filtered);
   }, [customers, searchTerm, filterStatus, sortColumn, sortDirection]);
 
-  const handleSort = (column: keyof Customer) => {
+  const handleSort = (column: keyof CustomerClass) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -258,600 +523,729 @@ const Customers: React.FC = () => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const fetchCustomers = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    // Validate required fields
+    if (!formData.Name || !formData.LastName || !formData.Email || !formData.Phone) {
+      showSnackbar('נא למלא את כל השדות החובה', 'error');
+      return;
+    }
+
     try {
       setLoading(true);
-      if (!user) {
-        console.log('No user found, returning early');
-        return;
-      }
-
-      console.log('Fetching customers for user:', user.uid);
+      const timestamp = Timestamp.now();
       
-      // Use getAllCustomers to fetch all non-deleted customers
-      const fetchedCustomers = await customerService.getAllCustomers(user.uid);
-      console.log('Fetched customers:', fetchedCustomers.length);
+      const customerData = {
+        ...formData,
+        id: selectedCustomer?.id || uuidv4(),
+        userId: user.uid,
+        createdBy: selectedCustomer ? selectedCustomer.CreatedBy : user.uid,
+        updatedBy: user.uid,
+        createdAt: selectedCustomer ? 
+          (typeof selectedCustomer.createdAt === 'object' && selectedCustomer.createdAt !== null && 'toDate' in selectedCustomer.createdAt ? 
+            selectedCustomer.createdAt : 
+            timestamp) :
+          timestamp,
+        updatedAt: timestamp,
+        isDeleted: false,
+        status: formData.Status || 'פעיל',
+        tags: formData.Tags || [],
+      };
 
-      setCustomers(fetchedCustomers);
-      setFilteredCustomers(fetchedCustomers);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', error.message);
-        console.error('Error stack:', error.stack);
+      const customersRef = collection(db, CUSTOMERS_COLLECTION);
+      
+      if (selectedCustomer) {
+        const customerRef = doc(db, CUSTOMERS_COLLECTION, selectedCustomer.id);
+        await updateDoc(customerRef, {
+          ...customerData,
+          id: selectedCustomer.id,
+        });
+        console.log('Customer updated successfully');
+        showSnackbar('הלקוח עודכן בהצלחה');
+      } else {
+        await addDoc(customersRef, customerData);
+        console.log('New customer created successfully');
+        showSnackbar('לקוח חדש נוצר בהצלחה');
       }
-      showSnackbar('שגיאה בטעינת הלקוחות', 'error');
+
+      setIsAddingNew(false);
+      setIsEditModalOpen(false);
+      setSelectedCustomer(undefined);
+      setFormData({
+        id:'',
+  assignedTo: [],
+  Balance: 0,
+  ComeFrom: '',
+  Comments: [],
+  CompanyName:'',
+  CreatedBy: '',
+  createdAt: '',
+  Email: '',
+  IsDeleted: false,
+  LastName: '',
+  Links: [],
+  Name: '',
+  Phone: 0,
+  Projects: [],
+  Status: "פעיל" ,
+  Tags: [],
+  Tasks: [],
+      });
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      showSnackbar('שגיאה בשמירת הלקוח', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    try {
-      const customerData: Customer = {
-        ...formData,
-        id: selectedCustomer?.id || uuidv4(),
-        userId: user.uid,  // Add this line
-        createdBy: user.uid,
-        updatedBy: user.uid,
-        createdAt: selectedCustomer ? selectedCustomer.createdAt : new Date(),
-        updatedAt: new Date(),
-        lastContact: new Date(),
-        contracts: [],
-        status: 'פעיל',
-        isDeleted: false,
-      } as Customer;
-
-      if (selectedCustomer) {
-        await customerService.updateCustomer(selectedCustomer.id, customerData);
-        showSnackbar('הלקוח עודכן בהצלחה');
-      } else {
-        await customerService.createCustomer(customerData);
-        showSnackbar('לקוח חדש נוצר בהצלחה');
-      }
-
-      fetchCustomers();
-      setOpenEditDialog(false);
-      setSelectedCustomer(null);
-      setFormData({});
-    } catch (error) {
-      console.error('Error saving customer:', error);
-      showSnackbar('שגיאה בשמירת הלקוח', 'error');
+  const handleUpdate = (event: React.FormEvent, updatedItem: CustomerClass) => {
+    event.preventDefault();
+    const validStatuses = ["פעיל", "לא פעיל", "בטיפול"] as const;
+    if (!validStatuses.includes(updatedItem.Status as any)) {
+      console.error('Invalid status value:', updatedItem.Status);
+      return;
     }
+    setFormData({
+      ...formData,
+      Status: updatedItem.Status as "פעיל" | "לא פעיל" | "בטיפול"
+    });
+    setCustomers((prevCustomers) => {
+      return prevCustomers.map((customer) => {
+        if (customer.id === updatedItem.id) {
+          return {
+            ...customer,
+            ...updatedItem,
+            status: updatedItem.Status as "פעיל" | "לא פעיל" | "בטיפול"
+          };
+        }
+        return customer;
+      });
+    });
+    handleSubmit(event);
   };
 
   const handleDelete = async (id: string) => {
-    if (!user) return;
+    if (!user || !window.confirm('האם אתה בטוח שברצונך למחוק לקוח זה?')) return;
 
     try {
+      setLoading(true);
       await customerService.deleteCustomer(id, user.uid);
-      await fetchCustomers();
       showSnackbar('הלקוח נמחק בהצלחה');
     } catch (error) {
       console.error('Error deleting customer:', error);
       showSnackbar('שגיאה במחיקת הלקוח', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleOpenEditDialog = (customer?: Customer) => {
-    setSelectedCustomer(customer || null);
-    setFormData(customer || {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      companyName: '',
-      status: 'פעיל', 
-      source: '',
-      notes: '',
-      tags: [],
-      lastContact: new Date(),
-      website: '',
-      industry: '',
-      size: 'small',
-      annualRevenue: 0,
-      paymentTerms: '',
-    });
-    setOpenEditDialog(true);
-  };
-
-  const handleOpenViewDialog = (customer: Customer) => {
+  const handleOpenViewDialog = (customer: CustomerClass) => {
     setSelectedCustomer(customer);
-    setOpenViewDialog(true);
-    setOpenEditDialog(false);
+    setIsEditModalOpen(true);
   };
 
-  const handleEditCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setFormData(customer);
-    setOpenEditDialog(true);
-    setOpenViewDialog(false);
-  };
-
-  const handleSaveNote = async () => {
-    if (!user || !selectedCustomer) return;
-
-    try {
-      await customerService.updateCustomer(selectedCustomer.id, { notes });
-      showSnackbar('הערה נשמרה בהצלחה');
-    } catch (error) {
-      console.error('Error saving note:', error);
-      showSnackbar('שגיאה בשמירת ההערה', 'error');
+  const handleCustomerClick = (customer: CustomerClass) => {
+    if (selectedCustomer?.id === customer.id) {
+      setSelectedCustomer(undefined);
+    } else {
+      setSelectedCustomer(customer);
     }
   };
 
-  const handleOpenNoteDialog = () => {
-    setOpenNoteDialog(true);
-  };
+  const renderCustomerDetails = (customer: CustomerClass) => (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 'bold' }}>
+        {customer.name} {customer.lastName}
+      </Typography>
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="body1" component="p">
+          <span style={{ fontWeight: 'bold' }}>דוא״ל:</span> {customer.Email}
+        </Typography>
+        <Typography variant="body1" component="p">
+          <span style={{ fontWeight: 'bold' }}>טלפון:</span> {customer.Phone}
+        </Typography>
+        <Typography variant="body1" component="p">
+        </Typography>
+        <Typography variant="body1" component="p">
+          <span style={{ fontWeight: 'bold' }}>סטטוס:</span> {customer.Status}
+        </Typography>
+      </Box>
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="body1" component="p">
+          <span style={{ fontWeight: 'bold' }}>מקור:</span> {customer.ComeFrom}
+        </Typography>
+      </Box>
+    </Box>
+  );
 
-  const handleCloseNoteDialog = () => {
-    setOpenNoteDialog(false);
+  const renderCellContent = (value: any) => {
+    if (!value) return '';
+    
+    if (value instanceof Date) {
+      return value.toLocaleDateString('he-IL', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+    }
+    
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+    
+    if (typeof value === 'object') {
+      return Object.values(value).filter(Boolean).join(', ');
+    }
+    
+    return value;
   };
 
   return (
-    <ThemeProvider theme={ltrTheme}>
-      <CssBaseline />
-      <Box 
-        component={motion.div}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        sx={{ 
-          p: 3, 
-          direction: 'ltr',
-          textAlign: 'left',
-          background: '#f5f5f5',
-          minHeight: '100vh',
-        }}
-      >
-        <Typography variant="h4" gutterBottom color="primary">
-          לקוחות
-        </Typography>
+    <CacheProvider value={cacheRtl}>
+      <ThemeProvider theme={rtlTheme}>
+        <div className="container mx-auto px-4 py-8 text-right" dir="rtl">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-bold text-[#ec5252] flex items-center gap-2">
+                <FaUser />
+                לקוחות
+              </h1>
+            </div>
 
-        <Paper 
-          elevation={3} 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            mb: 3, 
-            p: 2, 
-            borderRadius: 2,
-            bgcolor: 'background.paper',
-            flexDirection: 'row',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="חיפוש לקוחות"
-            placeholder="חיפוש "
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="primary" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ 
-              mr: 2,
-              '& .MuiInputBase-root': {
-                flexDirection: 'row',
-              },
-              '& .MuiInputAdornment-root': {
-                marginLeft: 'auto',
-                marginRight: 0,
-              }
-            }}
-          />
-          <Button  
-            variant="contained" 
-            startIcon={<AddIcon />} 
-            onClick={() => handleOpenEditDialog()}
-            sx={{ 
-              mr: 2,
-              backgroundColor: ltrTheme.palette.primary.main,
-              '&:hover': {
-                backgroundColor: ltrTheme.palette.primary.dark,
-              }
-            }}
-          >
-            לקוח חדש
-          </Button>
-         
-        
-          <FormControl sx={{ ml: 2, minWidth: 150 }}>
-            <InputLabel id="filter-status-label">הכל</InputLabel>
-            <Select
-              labelId="filter-status-label"
-              id="filter-status"
-              value={filterStatus}
-              label="סטטוס"
-              onChange={(e) => setFilterStatus(e.target.value)}
+
+            <button
+              onClick={() => setIsAddingNew(true)}
+              className="flex items-center justify-center bg-[#ec5252] hover:bg-red-700 text-white rounded-md px-4 py-2 transition-colors duration-300 gap-2"
             >
-              <MenuItem value="">הכל </MenuItem>
-              <MenuItem value="פעיל">פעיל</MenuItem>
-              <MenuItem value="לא פעיל">לא פעיל</MenuItem>
-            </Select>
-          </FormControl>
-        </Paper>
-
-        {loading ? (
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }} aria-label="customers table">
-              <TableHead>
-                <TableRow>
-                  {['שם', 'חברה', 'אימייל', 'טלפון', 'סטטוס', 'תאריך יצירה', 'פעולות'].map((header) => (
-                    <TableCell key={header}>{header}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[...Array(6)].map((_, index) => (
-                  <TableRow key={index}>
-                    {[...Array(7)].map((_, cellIndex) => (
-                      <TableCell key={cellIndex}>
-                        <Skeleton variant="text" width="80%" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        ) : (
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }} aria-label="customers table">
-              <TableHead>
-                <TableRow>
-                  {([
-                    'firstName',
-                    'companyName',
-                    'email',
-                    'phone',
-                    'status',
-                    'industry',
-                    'size',
-                    'annualRevenue',
-                    'website',
-                    'createdAt'
-                  ] as (keyof Customer)[]).map((column) => (
-                    <TableCell key={column}>
-                      <Box 
-                        sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          cursor: 'pointer' 
-                        }} 
-                        onClick={() => handleSort(column)}
-                      >
-                        {column === 'firstName' && 'שם'}
-                        {column === 'companyName' && 'חברה'}
-                        {column === 'email' && 'אימייל'}
-                        {column === 'phone' && 'טלפון'}
-                        {column === 'status' && 'סטטוס'}
-                        {column === 'industry' && 'תעשייה'}
-                        {column === 'size' && 'גודל'}
-                        {column === 'annualRevenue' && 'הכנסה שנתית'}
-                        {column === 'website' && 'אתר'}
-                        {column === 'createdAt' && 'תאריך יצירה'}
-                        {sortColumn === column && (
-                          sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                        )}
-                      </Box>
-                    </TableCell>
-                  ))}
-                  <TableCell>פעולות</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredCustomers.map((customer) => (
-                  <TableRow key={customer.id} hover>
-                    <TableCell>{customer.firstName} {customer.lastName}</TableCell>
-                    <TableCell>{customer.companyName}</TableCell>
-                    <TableCell>{customer.email}</TableCell>
-                    <TableCell>{customer.phone}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={customer.status}
-                        color={customer.status === 'פעיל' ? 'success' : 'default'}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{customer.industry || '-'}</TableCell>
-                    <TableCell>{customer.size || '-'}</TableCell>
-                    <TableCell>{customer.annualRevenue?.toLocaleString() || '0'} ₪</TableCell>
-                    <TableCell>
-                      {customer.website ? (
-                        <a href={customer.website} target="_blank" rel="noopener noreferrer">
-                          {customer.website}
-                        </a>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>{customer.createdAt.toLocaleDateString('he-IL')}</TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={1}>
-                        <IconButton onClick={() => handleOpenEditDialog(customer)} color="primary">
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton onClick={() => handleDelete(customer.id)} color="error">
-                          <DeleteIcon />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-
-        {openEditDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden"
-            >
-              <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-white flex items-center">
-                  <PersonIcon className="ml-4" /> 
-                  {selectedCustomer ? 'ערוך לקוח' : 'צור לקוח חדש'}
-                </h2>
-                <motion.button
-                  whileHover={{ rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setOpenEditDialog(false)}
-                  className="text-red-500 hover:bg-red-500 hover:text-white rounded-full p-2 transition"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </motion.button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      שם פרטי
-                    </label>
-                    <motion.input
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.1 }}
-                      type="text"
-                      value={formData.firstName || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                      required
-                      placeholder="הכנס שם פרטי"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      שם משפחה
-                    </label>
-                    <motion.input
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.2 }}
-                      type="text"
-                      value={formData.lastName || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                      required
-                      placeholder="הכנס שם משפחה"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      אימייל
-                    </label>
-                    <motion.input
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 }}
-                      type="email"
-                      value={formData.email || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      required
-                      placeholder="הכנס כתובת אימייל"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      טלפון
-                    </label>
-                    <motion.input
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.4 }}
-                      type="tel"
-                      value={formData.phone || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                      required
-                      placeholder="הכנס מספר טלפון"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    חברה
-                  </label>
-                  <motion.input
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    type="text"
-                    value={formData.companyName || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-                    placeholder="הכנס שם חברה"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    הערות
-                  </label>
-                  <motion.textarea
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 }}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={4}
-                    placeholder="הכנס הערות"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition duration-300"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-4 pt-4">
-                  <motion.button
-                    type="button"
-                    onClick={() => setOpenEditDialog(false)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-                  >
-                    ביטול
-                  </motion.button>
-                  <motion.button
-                    type="submit"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center"
-                  >
-                    <span className="ml-2">✓</span> {selectedCustomer ? 'עדכן לקוח' : 'צור לקוח'}
-                  </motion.button>
-                </div>
-              </form>
-            </motion.div>
+              <FaPlus />
+              הוסף לקוח
+            </button>
           </div>
-        )}
+          
+        
+      
+          <Box sx={{ p: 3 }}>
+            {/* Date Range Selection */}
+            <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+              <ToggleButtonGroup
+                value={dateRangeType}
+                exclusive
+                onChange={(e, value) => value && setDateRangeType(value)}
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    color: '#ffffff',
+                    borderColor: '#ec5252',
+                    '&.Mui-selected': {
+                      backgroundColor: '#ec5252',
+                      color: '#ffffff',
+                      '&:hover': {
+                        backgroundColor: '#ec5252',
+                      },
+                    },
+                    '&:hover': {
+                      backgroundColor: '#ec5252',
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="week">
+                  שבוע אחרון
+                </ToggleButton>
+                <ToggleButton value="month">
+                  חודש אחרון
+                </ToggleButton>
+                <ToggleButton value="custom">
+                  טווח תאריכים
+                </ToggleButton>
+              </ToggleButtonGroup>
 
-        <AnimatedDialog 
-          open={openViewDialog} 
-          onClose={() => setOpenViewDialog(false)} 
-          maxWidth="sm" 
-          fullWidth
-          TransitionComponent={Fade}
-          PaperProps={{
-            component: motion.div,
-            initial: { opacity: 0, scale: 0.9 },
-            animate: { opacity: 1, scale: 1 },
-            transition: { duration: 0.3 }
-          }}
-        >
-          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-            {selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : 'פרטי לקוח'}
-          </DialogTitle>
-          <DialogContent>
-            {selectedCustomer && (
-              <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Avatar sx={{ 
-                  bgcolor: 'primary.main', 
-                  color: 'primary.contrastText',
-                  width: 100,
-                  height: 100,
-                  margin: '0 auto',
-                  mb: 3,
-                }}>
-                  {selectedCustomer.firstName[0]}{selectedCustomer.lastName[0]}
-                </Avatar>
-                <Typography variant="h6" color="text.primary" sx={{ mb: 1, textAlign: 'center' }}>
-                  {selectedCustomer.companyName}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 0.5, textAlign: 'center' }}>
-                  {selectedCustomer.email}
-                </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
-                  {selectedCustomer.phone}
-                </Typography>
-                <Chip 
-                  label={selectedCustomer.status === 'פעיל' ? 'פעיל' : 'לא פעיל'}
-                  color={selectedCustomer.status === 'פעיל' ? 'success' : 'error'}
-                  size="medium"
-                  variant="outlined"
-                  sx={{ mt: 2, mb: 2 }}
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'left', direction: 'ltr' }}>
-                  הערות: {notes}
-                </Typography>
-              </Box>
+              {dateRangeType === 'custom' && (
+                <LocalizationProvider 
+                  dateAdapter={AdapterDateFns}
+                  localeText={heIL.components.MuiLocalizationProvider.defaultProps.localeText}
+                >
+                  <DateRangePicker
+                    value={dateRange}
+                    onChange={(newValue) => {
+                      setDateRange(newValue);
+                    }}
+                    slotProps={{
+                      textField: {
+                        size: "small",
+                        sx: {
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: '#141414',
+                            borderRadius: '8px',
+                            color: '#e1e1e1',
+                            '& input': {
+                              textAlign: 'left',
+                            },
+                            '& fieldset': {
+                              borderColor: '#2a2a2a',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#404040',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#2563eb',
+                            },
+                          },
+                        }
+                      }
+                    }}
+                  />
+                </LocalizationProvider>
+              )}
+            </Box>
+
+            {/* Statistics Section */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 120,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out'
+                    }
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div" sx={{ fontSize: '0.9rem', color: '#808080' }}>
+                    {dateRangeType === 'week' ? 'לקוחות חדשים (שבוע אחרון)' :
+                     dateRangeType === 'month' ? 'לקוחות חדשים (חודש אחרון)' :
+                     'לקוחות חדשים (טווח נבחר)'}
+                  </Typography>
+                  <Typography variant="h4" component="div" sx={{ mt: 'auto', fontWeight: 'bold' }}>
+                    {statistics.newLastWeek}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 120,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out'
+                    }
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div" sx={{ fontSize: '0.9rem', color: '#808080' }}>
+                    סך לקוחות פעילים
+                  </Typography>
+                  <Typography variant="h4" component="div" sx={{ mt: 'auto', fontWeight: 'bold' }}>
+                    {statistics.customersByStatus.find(s => s.name === 'פעיל')?.value || 0}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 120,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out'
+                    }
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div" sx={{ fontSize: '0.9rem', color: '#808080' }}>
+                    {dateRangeType === 'week' ? 'הכנסות (שבוע אחרון)' :
+                     dateRangeType === 'month' ? 'הכנסות (חודש אחרון)' :
+                     'הכנסות (טווח נבחר)'}
+                  </Typography>
+                  <Typography variant="h4" component="div" sx={{ mt: 'auto', fontWeight: 'bold' }}>
+                    ₪{statistics.totalBalance.toLocaleString()}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 120,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.2s ease-in-out'
+                    }
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div" sx={{ fontSize: '0.9rem', color: '#808080' }}>
+                    יתרה צפויה
+                  </Typography>
+                  <Typography variant="h4" component="div" sx={{ mt: 'auto', fontWeight: 'bold' }}>
+                    ₪{statistics.expectedBalance.toLocaleString()}
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* Charts Section */}
+            <Grid container spacing={3} sx={{ mb: 4 }}>
+              <Grid item xs={8} md={6}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 200,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div">
+                    הכנסות בשבוע האחרון
+                  </Typography>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={statistics.revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+                      <XAxis dataKey="date" stroke="#e1e1e1" />
+                      <YAxis stroke="#e1e1e1" />
+                      <Tooltip contentStyle={{ backgroundColor: '#2a2a2a', color: '#e1e1e1' }} />
+                      <Line type="monotone" dataKey="amount" stroke="#ec5252" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 200,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div">
+                    התפלגות סטטוס לקוחות
+                  </Typography>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statistics.customersByStatus}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={50}
+                        fill="#2563eb"
+                      >
+                        {statistics.customersByStatus.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={['green', 'yellow', 'red'][index % 3]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#ec5252', color: '#e1e1e1' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: 200,
+                    bgcolor: '#1a1a1a',
+                    color: '#e1e1e1',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <Typography variant="h6" gutterBottom component="div">
+                    התפלגות מקור לקוחות
+                  </Typography>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statistics.customersBySource}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={50}
+                        fill="#2563eb"
+                      >
+                        {statistics.customersBySource.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={['#ec5252', 'blue', 'yellow', 'brown', 'pink'][index % 5]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#ec5252', color: '#e1e1e1' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Box sx={{ 
+              mb: 3, 
+              display: 'flex', 
+              gap: 2, 
+              flexWrap: 'wrap', 
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+              }}
+            
+              >
+              <TextField
+                dir="ltr"
+                sx={{
+                  width: '400px',
+                  flexGrow: 1, 
+                  maxWidth: 600,
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: '#141414',
+                    borderRadius: '8px',
+                    direction: 'rtl',
+                    textAlign: 'left',
+                    '& input': {
+                      textAlign: 'left',
+                    },
+                    '& fieldset': {
+                      borderColor: '#2a2a2a',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#404040',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#2563eb',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#e1e1e1',
+                  },
+                }}
+                placeholder="חפש לקוחות..."
+                variant="outlined"
+                size="small"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+
+                    <InputAdornment position="start" >
+                      <SearchIcon sx={{ color: '#808080' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <FormControl 
+                size="small" 
+                sx={{ 
+                  minWidth: 200,
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#2a2a2a',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#404040',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#ef4444',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#808080',
+                    '&.Mui-focused': {
+                      color: '#ef4444',
+                    },
+                  },
+                }}
+              >
+                <InputLabel>סנן לפי סטטוס</InputLabel>
+                <StyledSelect
+                  value={filterStatus || ''}
+                  label="סנן לפי סטטוס"
+                  onSelect={(value) => setFilterStatus(value)}
+                >
+                  <MenuItem value="פעיל">פעיל</MenuItem>
+                  <MenuItem value="לא פעיל">לא פעיל</MenuItem>
+                  <MenuItem value="בטיפול">בטיפול</MenuItem>
+                </StyledSelect>
+              </FormControl>
+            </Box>
+
+            <Box sx={{ direction: 'rtl' }}>
+              <TableContainer component={Paper} sx={{
+                backgroundColor: '#141414',
+                borderRadius: '12px',
+                border: '1px solid #2a2a2a',
+                '& .MuiTableCell-root': {
+                  borderColor: '#2a2a2a',
+                  color: '#e1e1e1',
+                  textAlign: 'right',
+                  padding: '16px',
+                },
+                '& .MuiTableRow-root:hover': {
+                  backgroundColor: '#1a1a1a',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease-in-out',
+                },
+                '& .MuiTableHead-root .MuiTableCell-root': {
+                  backgroundColor: '#1a1a1a',
+                  color: '#808080',
+                  fontWeight: 'bold',
+                  fontSize: '0.875rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                },
+                '& .MuiTableBody-root .MuiTableRow-root:last-child .MuiTableCell-root': {
+                  borderBottom: 'none',
+                },
+                '& .MuiChip-root': {
+                  borderRadius: '6px',
+                  height: '24px',
+                  fontSize: '0.75rem',
+                  fontWeight: 'medium',
+                },
+                '& .MuiIconButton-root': {
+                  color: '#808080',
+                  padding: '6px',
+                  '&:hover': {
+                    backgroundColor: '#2a2a2a',
+                    color: '#e1e1e1',
+                  },
+                },
+              }}>
+                <Table dir="rtl">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell onClick={() => handleSort('name')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        שם {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                      <TableCell onClick={() => handleSort('lastName')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        שם משפחה {sortColumn === 'lastName' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                      <TableCell onClick={() => handleSort('Email')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        דוא״ל {sortColumn === 'Email' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                      <TableCell onClick={() => handleSort('Phone')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        טלפון {sortColumn === 'Phone' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                   
+                      <TableCell onClick={() => handleSort('Status')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        סטטוס {sortColumn === 'Status' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                      <TableCell onClick={() => handleSort('ComeFrom')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        מקור {sortColumn === 'ComeFrom' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                      <TableCell onClick={() => handleSort('Balance')} style={{ cursor: 'pointer', textAlign: 'right' }}>
+                        תקציב {sortColumn === 'Balance' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={`skeleton-${index}`}>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                          <TableCell><Skeleton /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredCustomers.map((customer, index) => (
+                      <TableRow 
+                        key={`customer-${customer.id}-${index}`}
+                        onClick={() => handleCustomerClick(customer)}
+                        sx={{ '&:hover': { backgroundColor: '#2a2a2a' } }}
+                      >
+                        <TableCell style={{ textAlign: 'right' }}>{customer.name}</TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>{customer.lastName}</TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>{customer.Email}</TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>{customer.Phone}</TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>
+                          <Chip 
+                            label={customer.Status}
+                            color={statusConfig[customer.Status]?.color || 'default'}
+                            size="small"
+                            sx={{
+                              '& .MuiChip-label': {
+                                padding: '0 8px',
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>{customer.ComeFrom}</TableCell>
+                        <TableCell style={{ textAlign: 'right' }}>₪{customer.Balance?.toLocaleString() || 0}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+
+            {(selectedCustomer || isAddingNew) && (
+              <CustomerDetails
+                customer={selectedCustomer}
+                isNew={isAddingNew}
+                onClose={() => {
+                  setSelectedCustomer(undefined);
+                  setIsAddingNew(false);
+                }}
+                onSubmit={async (customer) => {
+                  if (isAddingNew) {
+                    await handleAddCustomer(customer);
+                  } else {
+                    await handleEditCustomer(customer);
+                  }
+                  setSelectedCustomer(undefined);
+                  setIsAddingNew(false);
+                }}
+                users={users}
+              />
             )}
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: 'center', mt: 2 }}>
-            <Button onClick={() => setOpenViewDialog(false)} color="secondary" variant="outlined" sx={{ borderColor: '#d32f2f', color: '#d32f2f' }}>
-              סגור
-            </Button>
-          </DialogActions>
-        </AnimatedDialog>
 
-        <AnimatedDialog 
-          open={openNoteDialog} 
-          onClose={handleCloseNoteDialog} 
-          maxWidth="sm" 
-          fullWidth
-          TransitionComponent={Fade}
-          PaperProps={{
-            component: motion.div,
-            initial: { opacity: 0, scale: 0.9 },
-            animate: { opacity: 1, scale: 1 },
-            transition: { duration: 0.3 }
-          }}
-        >
-          <DialogTitle color="primary" sx={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 600 }}>
-            הערות
-          </DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" color="text.secondary" sx={{ 
-              direction: 'ltr', 
-              textAlign: 'left',
-              unicodeBidi: 'bidi-override'
-            }}>
-              {notes}
-            </Typography>
-          </DialogContent>
-          <DialogActions sx={{ justifyContent: 'center', mt: 2 }}>
-            <Button onClick={handleCloseNoteDialog} color="secondary" variant="outlined" sx={{ borderColor: '#d32f2f', color: '#d32f2f' }}>
-              סגור
-            </Button>
-          </DialogActions>
-        </AnimatedDialog>
-
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert 
-            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
-            severity={snackbar.severity}
-            sx={{ width: '100%' }}
-          >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </ThemeProvider>
+            <Snackbar
+              open={snackbar.open}
+              autoHideDuration={6000}
+              onClose={() => setSnackbar({ open: false, message: '', severity: 'success' })}
+            >
+              <Alert
+                onClose={() => setSnackbar({ open: false, message: '', severity: 'success' })}
+                severity={snackbar.severity}
+                sx={{ width: '100%' }}
+              >
+                {snackbar.message}
+              </Alert>
+            </Snackbar>
+          </Box>
+        </div>
+      </ThemeProvider>
+    </CacheProvider>
   );
 };
 

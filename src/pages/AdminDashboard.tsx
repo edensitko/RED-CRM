@@ -92,7 +92,7 @@ const AdminDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-red-600">Admin Dashboard</h1>
+              <h1 className="text-xl font-semibold text-[#ec5252]">Admin Dashboard</h1>
             </div>
             <div className="flex items-center">
               <span className="text-gray-700 mr-4">
@@ -110,7 +110,7 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
+                  <div className="flex-shrink-0 bg-[#ec5252] rounded-md p-3">
                     <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>

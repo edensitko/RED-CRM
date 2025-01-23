@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
+import { CustomerClass } from '../types/customer';
+import { Task } from '../types/schemas';
+import { Project } from '../types/schemas';
+
 import {
   FaTasks,
   FaCheck,
@@ -18,28 +22,26 @@ import {
   FaFilter,
   FaUsers,
   FaComment,
-  FaTimes
+  FaTimes,
+  FaSearch,
+  FaThLarge,
+  FaList,
+  FaSort,
+  FaSortUp,
+  FaSortDown,
+  FaChevronDown,
+  FaHourglassHalf,
+  FaPlayCircle,
+  FaCheckCircle,
+  FaExclamationCircle,
+  FaExclamationTriangle,
+  FaInfo
 } from 'react-icons/fa';
-
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: 'לביצוע' | 'בביצוע' | 'הושלם';
-  priority: 'נמוכה' | 'בינונית' | 'גבוהה';
-  dueDate: string;
-  assignedTo: string[];
-  customerId?: string;
-  dealId?: string;
-  createdAt: number;
-  createdBy: string;
-  project?: { id: string; name: string };
-  updatedAt?: number;
-  urgency?: string;
-  repeat?: string;
-  completedAt?: number | null;
-  previousStatus?: 'לביצוע' | 'בביצוע' | 'הושלם' | null;
-}
+import { Dialog } from '@headlessui/react';
+import ItemModal from '../components/modals/ItemModal';
+import TaskModal from '../components/modals/TaskModal';
+import { toast } from 'react-toastify';
+import { users } from '../data/mockData';
 
 interface Comment {
   id: string;
@@ -49,11 +51,27 @@ interface Comment {
   timestamp: number;
 }
 
-interface User {
+interface TaskUser {
   id: string;
   email: string;
   name?: string;
   displayName?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes: string;
+  createdAt: number | null;
+  updatedAt: number | null;
+  contactPerson: string;
+  status: string;
+  type: string;
+  website: string;
+  industry: string;
 }
 
 interface SortConfig {
@@ -63,49 +81,29 @@ interface SortConfig {
 
 interface Filters {
   status: string[];
-  priority: string[];
   search: string;
   startDate: string;
   endDate: string;
 }
 
-const TASK_STATUS_CONFIG = {
-  'לביצוע': {
-    label: 'לביצוע',
-    color: 'bg-red-100 text-red-800',
-    icon: <FaSpinner className="mr-2" />
-  },
-  'בביצוע': {
-    label: 'בביצוע',
-    color: 'bg-red-200 text-red-700',
-    icon: <FaPause className="mr-2" />
-  },
-  'הושלם': {
-    label: 'הושלם',
-    color: 'bg-red-300 text-red-600',
-    icon: <FaCheck className="mr-2" />
-  }
-} as const;
+const TASK_STATUS_ICONS = {
+  'pending': <FaHourglassHalf className="text-red-500" />,
+  'in_progress': <FaPlayCircle className="text-yellow-500" />,
+  'completed': <FaCheckCircle className="text-green-500" />,
+  'פעיל': <FaPlayCircle className="text-blue-500" />,
+  'active': <FaPlayCircle className="text-blue-500" />
+};
 
-const TASK_PRIORITY_CONFIG = {
-  'נמוכה': {
-    label: 'נמוכה',
-    color: 'bg-red-100 text-red-800'
-  },
-  'בינונית': {
-    label: 'בינונית',
-    color: 'bg-red-200 text-red-700'
-  },
-  'גבוהה': {
-    label: 'גבוהה',
-    color: 'bg-red-300 text-red-600'
-  }
-} as const;
+const TASK_URGENCY_ICONS = {
+  'low': <FaInfo className="text-green-500" />,
+  'medium': <FaExclamationTriangle className="text-yellow-500" />,
+  'high': <FaExclamationCircle className="text-red-500" />
+};
 
 const Tasks: React.FC = () => {
   const { currentUser } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [taskUsers, setTaskUsers] = useState<TaskUser[]>([]);
   const [comments, setComments] = useState<{ [key: string]: Comment[] }>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
@@ -114,7 +112,6 @@ const Tasks: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'dueDate', direction: 'asc' });
   const [filters, setFilters] = useState<Filters>({
     status: [],
-    priority: [],
     search: '',
     startDate: '',
     endDate: ''
@@ -122,14 +119,18 @@ const Tasks: React.FC = () => {
   const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
-    status: 'לביצוע',
-    priority: 'בינונית',
+    status: 'pending',
     dueDate: new Date().toISOString().split('T')[0],
-    assignedTo: []
+    assignedTo: [],
+    project: undefined,
   });
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
-  const [undoTask, setUndoTask] = useState<{taskId: string, previousStatus: 'לביצוע' | 'בביצוע' | 'הושלם' | null} | null>(null);
-  
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'history'>('active');
+  const [undoTask, setUndoTask] = useState<{taskId: string, previousStatus: 'pending' | 'in_progress' | 'completed' | null} | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   // Add timeout ref to clear undo timer
   const undoTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -146,9 +147,9 @@ const Tasks: React.FC = () => {
             email: data.email || '',
             name: data.name,
             displayName: data.displayName
-          } as User;
+          } as TaskUser;
         });
-        setUsers(usersData);
+        setTaskUsers(usersData);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -164,16 +165,20 @@ const Tasks: React.FC = () => {
           id: doc.id,
           title: data.title || '',
           description: data.description || '',
-          status: data.status || 'לביצוע',
-          priority: data.priority || 'בינונית',
+          status: data.status || 'pending',
           dueDate: data.dueDate || new Date().toISOString().split('T')[0],
           assignedTo: Array.isArray(data.assignedTo) ? data.assignedTo : [currentUser?.uid || ''],
-          customerId: data.customerId,
-          dealId: data.dealId,
+          customerId: data.customerId || undefined,
+          dealId: data.dealId || undefined,
           createdAt: data.createdAt || Date.now(),
           createdBy: data.createdBy || currentUser?.uid || '',
-          completedAt: data.completedAt,
-          previousStatus: data.previousStatus
+          completedAt: data.completedAt || null,
+          previousStatus: data.previousStatus || null,
+          project: data.project || undefined,
+          updatedAt: data.updatedAt || Date.now(),
+          name: data.name || '',
+          priority: data.priority || 'medium', // Add default priority
+          updatedBy: data.updatedBy || currentUser?.uid || '' // Add updatedBy
         } as Task;
       });
       setTasks(tasksList);
@@ -181,8 +186,57 @@ const Tasks: React.FC = () => {
       console.error('Error fetching tasks:', error);
     });
 
+    // Fetch customers
+    const customersRef = collection(db, 'customers');
+    const unsubscribeCustomers = onSnapshot(customersRef, (snapshot) => {
+      const customersList = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          notes: data.notes || '',
+          createdAt: data.createdAt || null,
+          updatedAt: data.updatedAt || null,
+          contactPerson: data.contactPerson || '',
+          status: data.status || '',
+          type: data.type || '',
+          website: data.website || '',
+          industry: data.industry || ''
+        } as Customer;
+      });
+      setCustomers(customersList);
+    });
+
+    // Fetch projects
+    const projectsRef = collection(db, 'projects');
+    const unsubscribeProjects = onSnapshot(projectsRef, (snapshot) => {
+      const projectsList = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          description: data.description || '',
+          customerId: data.customerId || undefined,
+          status: data.status || 'תכנון',
+          startDate: data.startDate || '',
+          endDate: data.endDate || '',
+          budget: data.budget || 0,
+          createdAt: data.createdAt || '',
+          isFavorite: data.isFavorite || false
+          
+          
+        } as Project;
+      });
+      setProjects(projectsList);
+    });
+
     return () => {
       unsubscribe();
+      unsubscribeCustomers();
+      unsubscribeProjects();
     };
   }, [currentUser]);
 
@@ -194,13 +248,13 @@ const Tasks: React.FC = () => {
       const taskData = {
         title: newTask.title || '',
         description: newTask.description || '',
-        status: newTask.status || 'לביצוע',
-        priority: newTask.priority || 'בינונית',
+        status: newTask.status || 'pending',
         dueDate: newTask.dueDate || new Date().toISOString().split('T')[0],
         assignedTo: [currentUser.uid],
         createdAt: Date.now(),
         createdBy: currentUser.uid,
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        project: newTask.project,
       };
 
       if (selectedTask) {
@@ -219,10 +273,10 @@ const Tasks: React.FC = () => {
       setNewTask({
         title: '',
         description: '',
-        status: 'לביצוע',
-        priority: 'בינונית',
+        status: 'pending',
         dueDate: new Date().toISOString().split('T')[0],
-        assignedTo: []
+        assignedTo: [],
+        project: undefined,
       });
       setSelectedTask(null);
       setIsModalOpen(false);
@@ -234,12 +288,14 @@ const Tasks: React.FC = () => {
   const handleEditTask = (task: Task) => {
     setSelectedTask(task);
     setNewTask({
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      dueDate: task.dueDate,
-      assignedTo: task.assignedTo
+      title: task.title || '',
+      description: task.description || '',
+      status: ['pending', 'in_progress', 'completed', 'פעיל', 'active'].includes(task.status) 
+        ? task.status as 'pending' | 'in_progress' | 'completed' | 'פעיל' | 'active' 
+        : 'pending',
+      dueDate: task.dueDate || new Date().toISOString().split('T')[0],
+      assignedTo: task.assignedTo || [],
+      project: task.project || undefined,
     });
     setIsModalOpen(true);
   };
@@ -254,7 +310,7 @@ const Tasks: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (taskId: string, newStatus: 'לביצוע' | 'בביצוע' | 'הושלם') => {
+  const handleStatusChange = async (taskId: string, newStatus: 'pending' | 'in_progress' | 'completed') => {
     try {
       const taskRef = doc(db, 'tasks', taskId);
       const task = tasks.find(t => t.id === taskId);
@@ -266,20 +322,17 @@ const Tasks: React.FC = () => {
       const updates: Partial<Task> = {
         status: newStatus,
         updatedAt: Date.now(),
-        previousStatus
       };
 
-      if (newStatus === 'הושלם') {
-        updates.completedAt = Date.now();
+      if (newStatus === 'completed') {
+        updates.createdAt = Date.now();
       } else {
-        updates.completedAt = null;
+        updates.createdAt = null;
       }
 
       await updateDoc(taskRef, updates);
 
-      // Set undo state
-      setUndoTask({ taskId, previousStatus });
-
+    
       // Clear previous timeout if exists
       if (undoTimeoutRef.current) {
         clearTimeout(undoTimeoutRef.current);
@@ -299,7 +352,7 @@ const Tasks: React.FC = () => {
     try {
       const taskRef = doc(db, 'tasks', taskId);
       await updateDoc(taskRef, {
-        status: 'הושלם',
+        status: 'completed',
         completedAt: Date.now()
       });
     } catch (error) {
@@ -313,7 +366,7 @@ const Tasks: React.FC = () => {
     try {
       const commentData = {
         userId: currentUser.uid,
-        userName: users.find(u => u.id === currentUser.uid)?.name || currentUser.email || 'משתמש לא ידוע',
+        userName: users.find(u => u.id === currentUser.uid)?.firstName || currentUser.email || 'משתמש לא ידוע',
         content: newComment.trim(),
         timestamp: Date.now()
       };
@@ -334,10 +387,8 @@ const Tasks: React.FC = () => {
     try {
       const taskRef = doc(db, 'tasks', undoTask.taskId);
       const updates: Partial<Task> = {
-        status: undoTask.previousStatus as 'לביצוע' | 'בביצוע' | 'הושלם',
+        status: undoTask.previousStatus as 'pending' | 'in_progress' | 'completed',
         updatedAt: Date.now(),
-        completedAt: undoTask.previousStatus === 'הושלם' ? Date.now() : null,
-        previousStatus: null
       };
 
       await updateDoc(taskRef, updates);
@@ -351,488 +402,503 @@ const Tasks: React.FC = () => {
     }
   };
 
+
+
+  const handleTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Update task in Firestore
+      const taskDocRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskDocRef, {
+        ...updates,
+        updatedAt: Timestamp.now().toMillis()
+      });
+
+      // Update local state
+      const updatedTasks = tasks.map(task => 
+        task.id === taskId ? { ...task, ...updates } : task
+      );
+      setTasks(updatedTasks);
+
+      // Update selected task if it's the current one
+      if (selectedTask?.id === taskId) {
+        setSelectedTask({ ...selectedTask, ...updates });
+      }
+
+      toast.success('Task updated successfully');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error('Failed to update task');
+    }
+  };
+
   const filteredTasks = useMemo(() => {
-    if (!currentUser) return [];
-    
-    return tasks.filter((task) => {
-      // Only show tasks assigned to current user
-      if (!task.assignedTo.includes(currentUser.uid)) return false;
+    let filtered = tasks;
 
-      // Filter by tab
-      if (activeTab === 'active') {
-        if (task.status === 'הושלם') return false;
-      } else {
-        if (task.status !== 'הושלם') return false;
-      }
+    // Filter by tab
+    switch (activeTab) {
+      case 'completed':
+        filtered = filtered.filter(task => task.status === 'completed');
+        break;
+      case 'history':
+        filtered = filtered.filter(task => task.status !== 'pending');
+        break;
+      default: // 'active'
+        filtered = filtered.filter(task => task.status !== 'completed');
+    }
 
-      // Filter by search
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const matchesSearch = 
-          task.title.toLowerCase().includes(searchLower) ||
-          task.description.toLowerCase().includes(searchLower);
-        if (!matchesSearch) return false;
-      }
+    // Apply other filters
+    if (filters.status.length > 0) {
+      filtered = filtered.filter(task => filters.status.includes(task.title));
+    }
 
-      return true;
-    }).sort((a, b) => {
-      if (!sortConfig.key) return 0;
-      
-      const aValue = sortConfig.key ? a[sortConfig.key] : null;
-      const bValue = sortConfig.key ? b[sortConfig.key] : null;
-      
-      if (aValue === undefined || aValue === null) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (bValue === undefined || bValue === null) return sortConfig.direction === 'asc' ? 1 : -1;
-      
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [tasks, filters, sortConfig, currentUser, activeTab]);
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(task =>
+        task.title.toLowerCase().includes(searchLower) ||
+        task.description.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply sorting
+    if (sortConfig.key !== '') {
+      filtered.sort((a, b) => {
+        const aValue = a[sortConfig.key as keyof Task] ?? '';
+        const bValue = b[sortConfig.key as keyof Task] ?? '';
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [tasks, filters, sortConfig, activeTab]);
+
+  const handleSort = (key: keyof Task) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortTasks = (a: Task, b: Task) => {
+    if (!sortConfig.key) return 0;
+
+    const direction = sortConfig.direction === 'asc' ? 1 : -1;
+    const aValue = a[sortConfig.key];
+    const bValue = b[sortConfig.key];
+
+    if (sortConfig.key === 'assignedTo') {
+      return direction * ((a.assignedTo?.length || 0) - (b.assignedTo?.length || 0));
+    }
+
+    if (sortConfig.key === 'dueDate' || sortConfig.key === 'createdAt') {
+      const aDate = new Date(aValue as string).getTime();
+      const bDate = new Date(bValue as string).getTime();
+      return direction * (aDate - bDate);
+    }
+
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return direction * aValue.localeCompare(bValue);
+    }
+
+    return 0;
+  };
+
+  const sortedTasks = [...filteredTasks].sort(sortTasks);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8" dir="rtl">
+    <div className="p-6  min-h-screen text-[#e1e1e1]" dir="rtl">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <div className="flex space-x-4 space-x-reverse">
-          <button
-            onClick={() => setActiveTab('active')}
-            className={`px-6 py-2.5 text-sm font-medium border-b-2 ${
-              activeTab === 'active'
-                ? 'text-red-600 border-red-600'
-                : 'text-gray-500 border-transparent hover:text-red-600 hover:border-red-300'
-            }`}
+        <h1 className="text-2xl font-bold text-[#e1e1e1]">משימות</h1>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="חיפוש משימות..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="w-full bg-[#242424] text-[#e1e1e1] rounded-lg px-4 py-2 pr-10 focus:ring-2 focus:ring-red-500 focus:outline-none placeholder-gray-500"
+            />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
           >
-            משימות פעילות
-          </button>
+            <FaFilter className="w-4 h-4" />
+            סינון מתקדם
+            <FaChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? 'transform rotate-180' : ''}`} />
+          </motion.button>
           <button
-            onClick={() => setActiveTab('completed')}
-            className={`px-6 py-2.5 text-sm font-medium border-b-2 ${
-              activeTab === 'completed'
-                ? 'text-red-600 border-red-600'
-                : 'text-gray-500 border-transparent hover:text-red-600 hover:border-red-300'
-            }`}
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-[#e1e1e1] rounded-lg hover:bg-red-700 transition-all duration-200 shadow-lg shadow-red-900/20"
           >
-            משימות שהושלמו
+            <span>משימה חדשה</span>
+            <FaPlus />
           </button>
         </div>
-        <button
-          onClick={() => {
-            setSelectedTask(null);
-            setIsModalOpen(true);
-          }}
-          className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 transition-colors duration-150 flex items-center"
-        >
-          <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          משימה חדשה
-        </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="חיפוש משימות..."
-          value={filters.search}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          className="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500"
-        />
-      </div>
-
-      {/* Tasks List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
-                סטטוס
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                משימה
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                עדיפות
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                תאריך יעד
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredTasks.map((task) => (
-              <tr 
-                key={task.id} 
-                className="hover:bg-gray-50 transition-colors duration-150 cursor-pointer"
-                onClick={() => {
-                  setSelectedTask(task);
-                  setIsModalOpen(true);
+      {/* Advanced Filters */}
+      {showAdvancedFilters && (
+        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">סטטוס</label>
+              <select
+                multiple
+                value={filters.status}
+                onChange={(e) => {
+                  const values = Array.from(e.target.selectedOptions, option => option.value);
+                  setFilters(prev => ({ ...prev, status: values }));
                 }}
+                className="w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500"
               >
-                <td className="px-6 py-4">
-                  <div className="flex items-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newStatus = task.status === 'הושלם' ? 'לביצוע' : 'הושלם';
-                        handleStatusChange(task.id, newStatus);
-                      }}
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
-                        task.status === 'הושלם'
-                          ? 'border-red-600 bg-red-600 hover:bg-red-700 hover:border-red-700'
-                          : 'border-gray-300 hover:border-red-400'
-                      }`}
-                      title={task.status === 'הושלם' ? 'סמן כלא הושלם' : 'סמן כהושלם'}
-                    >
-                      {task.status === 'הושלם' && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900 mb-1">{task.title}</div>
-                  {task.description && (
-                    <div className="text-sm text-gray-500 line-clamp-2">{task.description}</div>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    TASK_PRIORITY_CONFIG[task.priority]?.color || 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {task.priority}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {new Date(task.dueDate).toLocaleDateString('he-IL')}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                <option value="pending">לביצוע</option>
+                <option value="in_progress">בתהליך</option>
+                <option value="completed">הושלם</option>
+              </select>
+            </div>
 
-      {/* Task Details Modal */}
-      <AnimatePresence>
-        {isModalOpen && selectedTask && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תאריך יעד</label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                  className="w-1/2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500"
+                />
+                <input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                  className="w-1/2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tasks Table */}
+      {viewMode === 'table' && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <button
+                      className="group inline-flex items-center"
+                      onClick={() => handleSort('title')}
+                    >
+                      כותרת
+                      <span className="ml-2">
+                        {sortConfig.key === 'title' ? (
+                          sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />
+                        ) : (
+                          <FaSort className="text-gray-400 group-hover:text-gray-500" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <button
+                      className="group inline-flex items-center"
+                      onClick={() => handleSort('status')}
+                    >
+                      סטטוס
+                      <span className="ml-2">
+                        {sortConfig.key === 'status' ? (
+                          sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />
+                        ) : (
+                          <FaSort className="text-gray-400 group-hover:text-gray-500" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <button
+                      className="group inline-flex items-center"
+                      onClick={() => handleSort('dueDate')}
+                    >
+                      תאריך יעד
+                      <span className="ml-2">
+                        {sortConfig.key === 'dueDate' ? (
+                          sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />
+                        ) : (
+                          <FaSort className="text-gray-400 group-hover:text-gray-500" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <button
+                      className="group inline-flex items-center"
+                      onClick={() => handleSort('assignedTo')}
+                    >
+                      משוייך ל
+                      <span className="ml-2">
+                        {sortConfig.key === 'assignedTo' ? (
+                          sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />
+                        ) : (
+                          <FaSort className="text-gray-400 group-hover:text-gray-500" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <button
+                      className="group inline-flex items-center"
+                      onClick={() => handleSort('urgency')}
+                    >
+                      דחיפות
+                      <span className="ml-2">
+                        {sortConfig.key === 'urgency' ? (
+                          sortConfig.direction === 'asc' ? <FaSortUp /> : <FaSortDown />
+                        ) : (
+                          <FaSort className="text-gray-400 group-hover:text-gray-500" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    פעולות
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sortedTasks.map((task) => (
+                  <tr
+                    key={task.id}
+                    onClick={() => handleTaskClick(task)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-gray-900">{task.title}</div>
+                      {task.description && (
+                        <div className="text-sm text-gray-500">{task.description}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        task.status === 'pending' ? 'bg-red-500/20 text-red-500' :
+                        task.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-500' :
+                        task.status === 'active' ? 'bg-blue-500/20 text-blue-500' :
+                        task.status === 'פעיל' ? 'bg-blue-500/20 text-blue-500' :
+                        'bg-green-500/20 text-green-500'
+                      }`}>
+                        {task.status || 'No Status'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {task.dueDate && (
+                        <div className="flex items-center">
+                          <FaCalendarAlt className="mr-2 text-gray-400" />
+                          {new Date(task.dueDate).toLocaleDateString('he-IL')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {task.assignedTo.map((userId, index) => (
+                        <span key={userId} className="inline-block">
+                          {users.find(u => u.id === userId)?.firstName || userId}
+                          {index < task.assignedTo.length - 1 && <span>, </span>}
+                        </span>
+                      ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {task.urgency && ['low', 'medium', 'high'].includes(task.urgency) && TASK_URGENCY_ICONS[task.urgency as keyof typeof TASK_URGENCY_ICONS]}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTask(task);
+                            setIsModalOpen(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          <FaEdit className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Task Grid */}
+      {viewMode === 'grid' && (
+        <AnimatePresence>
           <motion.div
+            key="grid-view"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
-            onClick={() => setIsModalOpen(false)}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className="bg-white rounded-lg p-6 w-full max-w-lg"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <h2 className="text-lg font-medium">פרטי משימה</h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">כותרת</label>
-                  <div className="text-sm text-gray-900">{selectedTask.title}</div>
-                </div>
-                {selectedTask.description && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">תיאור</label>
-                    <div className="text-sm text-gray-900 whitespace-pre-wrap">{selectedTask.description}</div>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">סטטוס</label>
-                  <div className="flex items-center space-x-2 space-x-reverse">
+            {sortedTasks.map((task) => (
+              <motion.div
+                key={task.id}
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="bg-gradient-to-br from-[#1e1e1e] to-[#2a2a2a] rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-lg font-semibold text-[#e1e1e1] truncate flex-1">{task.title}</h3>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleStatusChange(selectedTask.id, selectedTask.status === 'הושלם' ? 'לביצוע' : 'הושלם')}
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ${
-                        selectedTask.status === 'הושלם'
-                          ? 'border-red-600 bg-red-600 hover:bg-red-700 hover:border-red-700'
-                          : 'border-gray-300 hover:border-red-400'
-                      }`}
+                      onClick={() => handleEditTask(task)}
+                      className="p-1.5 rounded-full bg-[#3a3a3a] hover:bg-[#4a4a4a] transition-colors"
                     >
-                      {selectedTask.status === 'הושלם' && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
+                      <FaEdit className="text-[#e1e1e1] text-sm" />
                     </button>
-                    <span className="text-sm text-gray-900">
-                      {selectedTask.status === 'הושלם' ? 'הושלם' : 'לא הושלם'}
+                  </div>
+                </div>
+
+                <p className="text-[#888888] text-sm mb-4 line-clamp-2">{task.description}</p>
+
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FaCalendarAlt className="text-[#888888]" />
+                    <span className="text-sm text-[#e1e1e1]">
+                      {new Date(task.dueDate).toLocaleDateString('he-IL')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FaUsers className="text-[#888888]" />
+                    <span className="text-sm text-[#e1e1e1]">
+                      {task.assignedTo.length} משתתפים
                     </span>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">עדיפות</label>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    TASK_PRIORITY_CONFIG[selectedTask.priority]?.color || 'bg-gray-100 text-gray-500'
+
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    task.status === 'pending' ? 'bg-red-500/20 text-red-500' :
+                    task.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-500' :
+                    task.status === 'active' ? 'bg-blue-500/20 text-blue-500' :
+                    task.status === 'פעיל' ? 'bg-blue-500/20 text-blue-500' :
+                    'bg-green-500/20 text-green-500'
                   }`}>
-                    {selectedTask.priority}
+                    {task.status || 'No Status'}
                   </span>
+                  {task.project && (
+                    <span className="px-3 py-1 rounded-full text-sm bg-purple-500/20 text-purple-500">
+                      {task.project.name}
+                    </span>
+                  )}
+                  {task.urgency && ['low', 'medium', 'high'].includes(task.urgency) && TASK_URGENCY_ICONS[task.urgency as keyof typeof TASK_URGENCY_ICONS]}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">תאריך יעד</label>
-                  <div className="text-sm text-gray-900">
-                    {new Date(selectedTask.dueDate).toLocaleDateString('he-IL')}
-                  </div>
-                </div>
-                {selectedTask.completedAt && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">הושלם בתאריך</label>
-                    <div className="text-sm text-gray-900">
-                      {new Date(selectedTask.completedAt).toLocaleDateString('he-IL')}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
+      )}
+
+      {/* Undo Toast */}
+      <AnimatePresence>
+        {undoTask && (
+          <motion.div
+            key="undo-toast"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-4 right-4 bg-[#2a2a2a] text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3"
+          >
+            <span>סטטוס המשימה שונה</span>
+            <button
+              onClick={() => {
+                if (undoTask) {
+                  handleStatusChange(undoTask.taskId, undoTask.previousStatus || 'pending');
+                  setUndoTask(null);
+                }
+              }}
+              className="text-red-500 hover:text-red-400 font-medium"
+            >
+              בטל
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Task Modal */}
-      <AnimatePresence>
-        {isModalOpen && !selectedTask && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-2xl"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    משימה חדשה
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      setNewTask({
-                        title: '',
-                        description: '',
-                        status: 'לביצוע',
-                        priority: 'בינונית',
-                        dueDate: new Date().toISOString().split('T')[0],
-                        assignedTo: []
-                      });
-                      setSelectedTask(null);
-                    }}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <FaTimes className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      כותרת
-                    </label>
-                    <input
-                      type="text"
-                      value={newTask.title}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, title: e.target.value })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      תיאור
-                    </label>
-                    <textarea
-                      value={newTask.description}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, description: e.target.value })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      rows={4}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        סטטוס
-                      </label>
-                      <select
-                        value={newTask.status}
-                        onChange={(e) =>
-                          setNewTask({ ...newTask, status: e.target.value as Task['status'] })
-                        }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      >
-                        {Object.keys(TASK_STATUS_CONFIG).map((status) => (
-                          <option key={status} value={status}>
-                            {TASK_STATUS_CONFIG[status as keyof typeof TASK_STATUS_CONFIG].label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        עדיפות
-                      </label>
-                      <select
-                        value={newTask.priority}
-                        onChange={(e) =>
-                          setNewTask({ ...newTask, priority: e.target.value as Task['priority'] })
-                        }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      >
-                        {Object.keys(TASK_PRIORITY_CONFIG).map((priority) => (
-                          <option key={priority} value={priority}>
-                            {TASK_PRIORITY_CONFIG[priority as keyof typeof TASK_PRIORITY_CONFIG].label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      תאריך יעד
-                    </label>
-                    <input
-                      type="date"
-                      value={newTask.dueDate}
-                      onChange={(e) =>
-                        setNewTask({ ...newTask, dueDate: e.target.value })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      משתמשים מוקצים
-                    </label>
-                    <select
-                      multiple
-                      value={newTask.assignedTo}
-                      onChange={(e) => {
-                        const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                        setNewTask({ ...newTask, assignedTo: selectedOptions });
-                      }}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    >
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name || user.displayName || user.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex justify-end space-x-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsModalOpen(false);
-                        setNewTask({
-                          title: '',
-                          description: '',
-                          status: 'לביצוע',
-                          priority: 'בינונית',
-                          dueDate: new Date().toISOString().split('T')[0],
-                          assignedTo: []
-                        });
-                        setSelectedTask(null);
-                      }}
-                      className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                      ביטול
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-6 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600"
-                    >
-                      צור משימה
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Task Creation/Edit Modal */}
+      <TaskModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedTask(null);
+        }}
+        task={selectedTask || null}
+        users={users}
+        projects={projects}
+        customers={customers}
+        onTaskUpdate={handleTaskUpdate}
+      />
 
       {/* Comments Modal */}
       <AnimatePresence>
         {isCommentModalOpen && selectedTask && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+        )}
+        {isCommentModalOpen && selectedTask && (
+          <div className="fixed inset-0 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-2xl"
+              className="bg-[#1e1e1e] rounded-lg w-full max-w-2xl overflow-hidden relative text-[#e1e1e1]" dir="rtl"
             >
               <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    תגובות למשימה: {selectedTask.title}
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setIsCommentModalOpen(false);
-                      setNewComment('');
-                    }}
-                    className="text-gray-400 hover:text-gray-500"
-                  >
-                    <FaTimes className="w-6 h-6" />
-                  </button>
-                </div>
-
+                <h2 className="text-2xl font-bold mb-6">תגובות למשימה: {selectedTask.title}</h2>
                 <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
                   {comments[selectedTask.id]?.map((comment) => (
                     <div
                       key={comment.id}
-                      className="bg-gray-50 rounded-lg p-4"
+                      className="bg-[#141414] rounded-lg p-4"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-[#e1e1e1]">
                           {comment.userName}
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-[#888888]">
                           {new Date(comment.timestamp).toLocaleString('he-IL')}
                         </span>
                       </div>
-                      <p className="text-gray-700">{comment.content}</p>
+                      <p className="text-[#888888]">{comment.content}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex space-x-4">
+                <div className="flex space-x-4 space-x-reverse">
                   <input
                     type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="הוסף תגובה..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    className="flex-1 bg-[#141414] text-[#e1e1e1] border border-[#2a2a2a] rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
                   />
                   <button
                     onClick={() => handleCommentSubmit(selectedTask.id)}
                     disabled={!newComment.trim()}
-                    className="px-6 py-2 text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-50"
+                    className="px-4 py-2 bg-red-600 text-[#e1e1e1] rounded-lg hover:bg-red-700 transition-all duration-200 shadow-lg shadow-red-900/20 disabled:opacity-50"
                   >
                     שלח
                   </button>
@@ -842,8 +908,6 @@ const Tasks: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
-
-      
     </div>
   );
 };

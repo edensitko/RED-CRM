@@ -8,12 +8,12 @@ import {
   Typography,
   Button,
   TextField,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
+  MenuItem,
   Chip,
 } from '@mui/material';
+import StyledSelect from '../components/StyledSelect';
 
 interface Product {
   id: string;
@@ -90,7 +90,7 @@ const Products: React.FC = () => {
         />
         <FormControl sx={{ width: 200 }}>
           <InputLabel>קטגוריה</InputLabel>
-          <Select
+          <StyledSelect
             value={categoryFilter}
             label="קטגוריה"
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -101,7 +101,7 @@ const Products: React.FC = () => {
                 {category}
               </MenuItem>
             ))}
-          </Select>
+          </StyledSelect>
         </FormControl>
       </Box>
 

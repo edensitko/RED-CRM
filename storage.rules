@@ -16,31 +16,20 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Customer files - more permissive rules for testing
+    match /customers/{customerId}/files/{fileName} {
+      allow read, write: if request.auth != null;
+    }
+
     // Profile images
     match /profiles/{userId}/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
     }
 
-    // Post images
-    match /posts/{postId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-      allow delete: if isAdmin() || isOwner(request.auth.uid);
-    }
-
-    // Story images
-    match /stories/{storyId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-      allow delete: if isAdmin() || isOwner(request.auth.uid);
-    }
-
-    // Forms
-    match /forms/{formId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-      allow delete: if isAuthenticated();
+    // Fallback rule
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

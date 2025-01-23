@@ -280,7 +280,7 @@ const Ideas = () => {
     }, {} as Record<string, Idea[]>);
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }} dir="rtl">
+    <Box sx={{ p: 3, backgroundColor: 'background.paper', minHeight: '100vh' }} dir="rtl">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <div className="flex items-center gap-4">
           <Button
@@ -345,14 +345,14 @@ const Ideas = () => {
               alignItems: 'center', 
               justifyContent: 'space-between',
               mb: 2,
-              backgroundColor: 'white',
+              backgroundColor: 'background.paper',
               p: 2,
               borderRadius: '8px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
               cursor: 'pointer',
               transition: 'background-color 0.2s',
               '&:hover': {
-                backgroundColor: '#f8f8f8'
+                backgroundColor: 'background.default'
               }
             }}
           >
