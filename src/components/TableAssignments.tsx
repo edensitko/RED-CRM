@@ -149,7 +149,8 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
     } else if (field === 'customers') {
       value = customers.filter(c => selectedCustomers.includes(c.id));
     } else if (field === 'project') {
-      value = projects.find(p => p.id === selectedProject);
+      const selectedProjectObj = projects.find(p => p.id === selectedProject);
+      value = selectedProjectObj || null;
     } else {
       value = editValue;
     }
@@ -179,7 +180,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 className="w-full bg-gray-700 text-white rounded p-1"
                 dir="rtl"
               >
-                <option value="">בחר אחראי</option>
+                <option key="default-user" value="">בחר אחראי</option>
                 {users.map(user => (
                   <option key={user.id} value={user.id}>
                     {user.firstName && user.lastName 
@@ -211,7 +212,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option value="">בחר לקוח</option>
+                <option key="default-customer" value="">בחר לקוח</option>
                 {customers.map(customer => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name} {customer.lastName}
@@ -241,7 +242,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option value="">בחר פרויקט</option>
+                <option key="default-project" value="">בחר פרויקט</option>
                 {projects.map(project => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -271,7 +272,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option value="">בחר סטטוס</option>
+                <option key="default-status" value="">בחר סטטוס</option>
                 {statusOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -301,7 +302,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option value="">בחר דחיפות</option>
+                <option key="default-urgency" value="">בחר דחיפות</option>
                 {urgencyOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -490,15 +491,15 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
           </div>
         );
 
-      case 'urgency':
+      case 'urgent':
         return (
           <div onClick={(e) => {
             if (column.editable) {
               e.stopPropagation();
-              handleEdit(task.id, column.key, task.urgency);
+              handleEdit(task.id, column.key, task.urgent);
             }
           }} className={`${column.width}`}>
-            {getUrgencyBadge(task.urgency)}
+            {getUrgencyBadge(task.urgent)}
           </div>
         );
 

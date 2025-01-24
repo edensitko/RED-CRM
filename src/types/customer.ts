@@ -1,3 +1,5 @@
+import { SubTask } from "./schemas";
+
 export interface CustomerClass {
   id: string;
   name: string;  
@@ -18,4 +20,5 @@ export interface CustomerClass {
   Tags: string[];
   Tasks: string[];
   Files: Array<{ name: string; url: string; uploadedAt: string; size: number }>;
+ subTasks: SubTask[];  
 }

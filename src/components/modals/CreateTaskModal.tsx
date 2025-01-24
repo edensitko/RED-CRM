@@ -41,14 +41,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     status: 'לביצוע',
     dueDate: null,
     assignedTo: [],             
-    projectId: '',
     customers: [],
+    project: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     createdBy: '',
     updatedBy: '',
     isDeleted: false,
-    urgency: 'גבוהה',
+    urgent: 'גבוהה',  
     subTasks: [],
     comments: [],
     repeat: 'none',
@@ -86,22 +86,22 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   }, [task]);
 
   // Map Hebrew urgency levels to internal values
-  const mapUrgencyToInternal = (urgency: string) => {
+  const mapUrgencyToInternal = (urgent: string) => {
     const mapping: { [key: string]: string } = {
       'נמוכה': 'low',
       'בינונית': 'normal',
       'גבוהה': 'high'
     };
-    return mapping[urgency] || urgency;
+    return mapping[urgent] || urgent;
   };
 
-  const mapUrgencyToHebrew = (urgency: string) => {
+  const mapUrgencyToHebrew = (urgent: string) => {
     const mapping: { [key: string]: string } = {
       'low': 'נמוכה',
       'normal': 'בינונית',
       'high': 'גבוהה'
     };
-    return mapping[urgency] || urgency;
+    return mapping[urgent] || urgent;
   };
 
   const validateForm = (): boolean => {
@@ -125,7 +125,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       const taskData = {
         ...taskState,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        urgent: mapUrgencyToInternal(taskState.urgent || 'נמוכה')
       };
 
       if (task && onUpdateTask) {
@@ -148,7 +149,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const handleInputChange = (field: keyof Task, value: any) => {
     setTaskState(prev => ({
       ...prev,
-      [field]: field === 'urgency' ? mapUrgencyToInternal(value) : value
+      [field]: field === 'urgent' ? mapUrgencyToHebrew(value) : value
     }));
     // Clear error when field is updated
     if (formErrors[field]) {
@@ -180,7 +181,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         createdAt: new Date(),
         updatedAt: new Date(),
         createdBy: '',
-        urgency: 'גבוהה',
+        urgent: 'גבוהה',
         status: 'בתהליך',
         dueDate: new Date(),
         completed: false,
@@ -222,18 +223,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <div>
               <label className="block text-gray-400 mb-1">דחיפות</label>
               <div className="flex space-x-2">
-                {['נמוכה', 'בינונית', 'גבוהה'].map((urgency) => (
+                {['נמוכה', 'בינונית', 'גבוהה'].map((urgent) => (
                   <button
-                    key={urgency}
+                    key={urgent}
                     type="button"
-                    onClick={() => handleInputChange('urgency', urgency)}
+                    onClick={() => handleInputChange('urgent', urgent)}
                     className={`px-4 py-2 rounded-md flex items-center space-x-2 ${
-                      mapUrgencyToHebrew(taskState.urgency) === urgency
+                      mapUrgencyToHebrew(taskState.urgent) === urgent
                         ? 'bg-red-600 text-white'
                         : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333333]'
                     }`}
                   >
-                    {urgency}
+                    {urgent}
                   </button>
                 ))}
               </div>
@@ -296,10 +297,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <div>
               <label className="block text-gray-400 mb-1">פרויקט</label>
               <Listbox
-                value={taskState.projectId}
+                value={taskState.project?.id || ''}
                 onChange={(value) => {
                   const project = projects.find(p => p.id === value);
-                  handleInputChange('projectId', value);
+                  handleInputChange('project', value);
                   handleInputChange('project', project);
                 }}
               >

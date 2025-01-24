@@ -9,7 +9,7 @@ export interface SubTask {
   createdAt: any;
   updatedAt: any;
   createdBy: string;
-  urgency: string;
+  urgent: 'נמוכה' | 'בינונית' | 'גבוהה' | string;
   status: string;
   dueDate: any;
   description: string;
@@ -72,31 +72,20 @@ export interface AdminUser extends User {
 }
 
 export interface Task extends BaseEntity {
-  tasks: never[];
-  files: never[];
-  links: never[];
+  id: string;
+  tasks: string[];
+  files: string[];
+  links: string[];
   isFavorite: boolean;
   title: string;
   description: string;
-  status: 'לביצוע' | 'בתהליך' | 'הושלם';
-  urgency: 'נמוכה' | 'בינונית' | 'גבוהה';
+  status: 'לביצוע' | 'בתהליך' | 'הושלם' | string;
+  urgent: 'נמוכה' | 'בינונית' | 'גבוהה' | string;
   repeat?: 'none' | 'daily' | 'weekly' | 'monthly';
   dueDate?: Timestamp | null;
   assignedTo: string[];
-  projectId?: string;
-  project?: {
-    id: string;
-    name: string;
-    status: string;
-    budget: number;
-    createdAt: Timestamp;
-    customerId: string;
-    description: string;
-    endDate: Timestamp;
-    isFavorite: boolean;
-    startDate: string;
-  } | null;
-  customers?: TaskCustomer[];
+  project?: Project | null;
+  customers?: CustomerClass[];
   subTasks?: SubTask[];
   comments?: Array<{
     id: string;
@@ -280,7 +269,7 @@ export interface Item extends BaseEntity {
 }
 
 export interface TaskCustomer {
-  id: string;
+  id: any;
   name: string;  
   lastName: string;
   companyName: string;  

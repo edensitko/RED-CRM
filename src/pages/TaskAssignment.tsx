@@ -49,8 +49,8 @@ const getStatusText = (status: string): string => {
   return option ? option.value : status;
 };
 
-const getUrgencyText = (urgency?: string): string => {
-  switch (urgency) {
+const getUrgencyText = (urgent?: string): string => {
+  switch (urgent) {
     case 'high':
       return 'High';
     case 'medium':
@@ -117,22 +117,59 @@ const TaskAssignment: React.FC = () => {
 
   // Fetch projects with error handling and retry
   useEffect(() => {
-    const fetchProjects = async () => {
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000;
+
+    const setupProjectsListener = () => {
       try {
+        console.log('Setting up projects listener...');
         const projectsRef = collection(db, 'projects');
-        const projectsSnapshot = await getDocs(projectsRef);
-        const projectsList = projectsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Project[];
-        setProjects(projectsList);
+        
+        const unsubscribe = onSnapshot(
+          projectsRef,
+          (snapshot) => {
+            console.log('Received projects snapshot:', snapshot.size, 'documents');
+            const projectsData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as Project[];
+            console.log('Processed projects data:', projectsData);
+            setProjects(projectsData);
+          },
+          (error) => {
+            console.error('Error fetching projects:', error);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`Retrying projects setup (${retryCount}/${maxRetries}) in ${retryDelay}ms...`);
+              setTimeout(setupProjectsListener, retryDelay);
+            }
+          }
+        );
+
+        return unsubscribe;
       } catch (error) {
-        console.error('Error fetching projects:', error);
+        console.error('Error setting up projects listener:', error);
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(setupProjectsListener, retryDelay);
+        }
+        return () => {};
       }
     };
 
-    fetchProjects();
+    const unsubscribe = setupProjectsListener();
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
+
+  // Debug projects state changes
+  useEffect(() => {
+    console.log('Projects state updated:', projects);
+  }, [projects]);
 
   // Fetch customers with error handling and retry
   useEffect(() => {
@@ -265,7 +302,7 @@ const TaskAssignment: React.FC = () => {
     await handleUpdateTask(taskId, { assignedTo: newUsers });
   };
 
-  const handleCustomersChange = async (taskId: string, customers: TaskCustomer[]) => {
+  const handleCustomersChange = async (taskId: string, customers: CustomerClass[]) => {
     await handleUpdateTask(taskId, { customers });
   };
 
@@ -307,17 +344,19 @@ const TaskAssignment: React.FC = () => {
     status: 'לביצוע',
     assignedTo: [],
     repeat: 'none',
-    project: null,
     customers: [],
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
     createdBy: currentUser?.uid || '', // Add this line
     updatedBy: currentUser?.uid || '', // Add this line
-    urgency: 'גבוהה',
+    urgent: 'גבוהה',
     isFavorite: false,
     tasks: [],
     files: [],
-    links: []
+    links: [],
+    comments: [],
+    subTasks: [],
+    project: null,
   });
 
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -334,7 +373,7 @@ const TaskAssignment: React.FC = () => {
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
     createdBy: '',
-    urgency: 'גבוהה',
+    urgent: 'גבוהה',
     status: 'לביצוע',
     dueDate: null,
     description: '',
@@ -474,7 +513,7 @@ const TaskAssignment: React.FC = () => {
 
       // Filter by projects
       if (filters.projects.length > 0) {
-        const projectMatches = filters.projects.includes(task.projectId || '') || 
+        const projectMatches = filters.projects.includes(task.project?.id || '') || 
                              (task.project && filters.projects.includes(task.project.id));
         if (!projectMatches) {
           return false;
@@ -487,7 +526,7 @@ const TaskAssignment: React.FC = () => {
         const matchesTitle = (task.title || '').toLowerCase().includes(searchTerm);
         const matchesDescription = (task.description || '').toLowerCase().includes(searchTerm);
         const matchesProject = task.project?.name?.toLowerCase().includes(searchTerm) || 
-                           projects.find(p => p.id === task.projectId)?.name?.toLowerCase().includes(searchTerm) || 
+                           projects.find(p => p.id === task.project?.id)?.name?.toLowerCase().includes(searchTerm) || 
                            false;
         const matchesCustomers = (task.customers || []).some(customer => 
           customer.name.toLowerCase().includes(searchTerm) ||
@@ -543,8 +582,8 @@ const TaskAssignment: React.FC = () => {
     }
 
     if (sortConfig.key === 'project') {
-      const aName = (a.project?.name || projects.find(p => p.id === a.projectId)?.name) || '';
-      const bName = (b.project?.name || projects.find(p => p.id === b.projectId)?.name) || '';
+      const aName = (a.project?.name || projects.find(p => p.id === a.project?.id)?.name) || '';
+      const bName = (b.project?.name || projects.find(p => p.id === b.project?.id)?.name) || '';
       return direction * aName.localeCompare(bName);
     }
 
@@ -564,7 +603,7 @@ const TaskAssignment: React.FC = () => {
   const sortedTasks = [...filteredTasks].sort(sortTasks);
 
   const repeatableTasks = tasks.filter(task => task.repeat !== 'none');
-  const urgentTasks = tasks.filter(task => task.urgency);
+  const urgentTasks = tasks.filter(task => task.urgent);
 
   const [isRepeatableCardsOpen, setIsRepeatableCardsOpen] = useState(true);
   const [isUrgentCardsOpen, setIsUrgentCardsOpen] = useState(true);
@@ -574,9 +613,9 @@ const TaskAssignment: React.FC = () => {
   const weeklyTasks = repeatableTasks.filter(task => task.repeat === 'weekly');
   const monthlyTasks = repeatableTasks.filter(task => task.repeat === 'monthly');
 
-  const highUrgencyTasks = urgentTasks.filter(task => task.urgency === 'גבוהה');
-  const mediumUrgencyTasks = urgentTasks.filter(task => task.urgency === 'בינונית');
-  const lowUrgencyTasks = urgentTasks.filter(task => task.urgency === 'נמוכה');
+  const highUrgencyTasks = urgentTasks.filter(task => task.urgent === 'גבוהה');
+  const mediumUrgencyTasks = urgentTasks.filter(task => task.urgent === 'בינונית');
+  const lowUrgencyTasks = urgentTasks.filter(task => task.urgent === 'נמוכה');
 
   console.log('All urgent tasks:', urgentTasks);
   console.log('High urgency tasks:', highUrgencyTasks);
@@ -700,13 +739,12 @@ const TaskAssignment: React.FC = () => {
       const newSubTask: Task = {
         id: crypto.randomUUID(),
         title: newSubTaskTitle,
-        projectId: selectedTask?.projectId || '',
         description: '',
         status: 'לביצוע',
         dueDate: null,
         assignedTo: [],
         customers: [],
-        urgency: 'גבוהה',
+        urgent: 'גבוהה',
         completed: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -716,7 +754,7 @@ const TaskAssignment: React.FC = () => {
         isFavorite: false,
         tasks: [],
         files: [],
-        links: []
+        links: [],
       };
 
       await updateDoc(taskRef, {
@@ -781,7 +819,7 @@ const TaskAssignment: React.FC = () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: currentUser?.uid || '',
-        urgency: '',
+        urgent: 'גבוהה',
         dueDate: undefined,
         completed: false
       };
@@ -803,7 +841,7 @@ const TaskAssignment: React.FC = () => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: currentUser?.uid || '',
-        urgency: '',
+        urgent: 'גבוהה',
         dueDate: undefined,
         completed: false
       });
@@ -867,17 +905,17 @@ const TaskAssignment: React.FC = () => {
 
               <div>
                 <h3 className="text-sm font-medium text-gray-400 mb-2">Urgency</h3>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getUrgencyColor(task.urgency ?? '')}`}>
-                  {getUrgencyText(task.urgency ?? '')}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getUrgencyColor(task.urgent ?? '')}`}>
+                  {getUrgencyText(task.urgent ?? '')}
                 </span>
               </div>
             </div>
 
-            {(task.project || task.projectId) && (
+            {(task.project || task.project) && (
               <div>
                 <h3 className="text-sm font-medium text-gray-400 mb-2">Project</h3>
                 <span className="text-gray-300">
-                  {task.project?.name || projects.find(p => p.id === task.projectId)?.name || 'Unknown Project'}
+                  {task.project?.name || projects.find(p => p.id === task.project?.id)?.name || 'Unknown Project'}
                 </span>
               </div>
             )}
@@ -1058,7 +1096,7 @@ const TaskAssignment: React.FC = () => {
       const newTask = {
         ...taskData,
         status: taskData.status || 'לביצוע',
-        urgency: taskData.urgency || 'נמוכה',
+        urgent: taskData.urgent || 'נמוכה',
         assignedTo: Array.isArray(taskData.assignedTo) ? taskData.assignedTo : [],
         customers: Array.isArray(taskData.customers) ? taskData.customers : [],
         dueDate: taskData.dueDate instanceof Timestamp ? taskData.dueDate : (taskData.dueDate ? Timestamp.fromDate(new Date(taskData.dueDate)) : null),
@@ -1103,14 +1141,13 @@ const TaskAssignment: React.FC = () => {
             updatedAt: Timestamp.now(),
             updatedBy: currentUser?.uid || '',
             isDeleted: false,
-            urgency: 'נמוכה',
+            urgent: 'נמוכה',
             subTasks: [],
-            comments: [],
+            comments: [],        
             links: [],
             files: [],
             tasks: [],
             repeat: 'none',
-            project: null,
             isFavorite: false
           };
           
@@ -1328,16 +1365,15 @@ const TaskAssignment: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Urgency</label>
+              <label className="block text-sm font-medium text-gray-700">Urgent</label>
               <select
-                value={newSubTaskData.urgency}
-                onChange={(e) => setNewSubTaskData(prev => ({ ...prev, urgency: e.target.value }))}
+                value={newSubTaskData.urgent}
+                onChange={(e) => setNewSubTaskData(prev => ({ ...prev, urgent: e.target.value }))}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               >
-                <option value="low">Low</option>
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
+                <option value="נמוכה">נמוכה</option>
+                <option value="בינונית">בינונית</option>
+                <option value="גבוהה">גבוהה</option>
               </select>
             </div>
 
@@ -1683,8 +1719,14 @@ const TaskAssignment: React.FC = () => {
           task={selectedTask}
           customers={customers}
           onTaskUpdate={handleUpdateTask}
-          users={users} 
-          projects={projects}        />
+          users={users}
+          projects={projects}
+          onCreateTask={handleCreateTask}
+          onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
+          subTasks={[]} 
+          comments={[]}       
+        />
       )}
       {showNameModal && <NameModal />}
       <CreateTaskModal

@@ -19,7 +19,7 @@ import { db } from '../../config/firebase';
 import { Task } from '../../types/schemas';
 import { activityService } from './activityService';
 
-const TASKS_COLLECTION = 'Tasks';
+const TASKS_COLLECTION = 'tasks';
 
 const convertToTimestamp = (date: Date | string | Timestamp | null | undefined) => {
   if (!date) return null;
