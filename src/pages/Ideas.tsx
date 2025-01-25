@@ -34,6 +34,23 @@ import { styled } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { 
+  FaLightbulb, 
+  FaPlus, 
+  FaSearch, 
+  FaSortAmountDown, 
+  FaSortAmountUp, 
+  FaChevronLeft, 
+  FaChevronDown, 
+  FaEdit, 
+  FaTrash,
+  FaFolder,
+  FaClipboardList,
+  FaTag,
+  FaList,
+  FaTimes,
+  FaCheck
+} from 'react-icons/fa';
 
 interface Idea {
   id: string;
@@ -43,6 +60,12 @@ interface Idea {
   type: 'feature' | 'improvement' | 'bug' | 'other';
   category: string;
   backgroundColor: string;
+}
+
+interface IdeaPoint {
+  id: string;
+  content: string;
+  createdAt: string;
 }
 
 const categories = [
@@ -100,6 +123,10 @@ const Ideas = () => {
   const [sortBy, setSortBy] = useState<'title' | 'category'>('title');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>(categories);
+  const [detailViewIdea, setDetailViewIdea] = useState<Idea | null>(null);
+  const [activeTab, setActiveTab] = useState('details');
+  const [points, setPoints] = useState<IdeaPoint[]>([]);
+  const [newPoint, setNewPoint] = useState('');
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
@@ -128,8 +155,8 @@ const Ideas = () => {
     setTitle('');
     setContent('');
     setType('feature');
-    setCategory(categories[0]);
-    setBackgroundColor(backgroundColors[0]);
+    setCategory('');
+    setBackgroundColor('#ffffff');
     setOpenDialog(true);
   };
 
@@ -263,6 +290,14 @@ const Ideas = () => {
     );
   };
 
+  const truncateContent = (content: string, wordLimit: number = 50) => {
+    const words = content.split(' ');
+    if (words.length > wordLimit) {
+      return words.slice(0, wordLimit).join(' ') + '...';
+    }
+    return content;
+  };
+
   // Group ideas by category
   const groupedIdeas = sortedIdeas
     .filter(idea => 
@@ -279,304 +314,522 @@ const Ideas = () => {
       return groups;
     }, {} as Record<string, Idea[]>);
 
+  const tabs = [
+    { id: 'details', label: 'פרטים בסיסיים', icon: <FaFolder /> },
+    { id: 'additional', label: 'פרטים נוספים', icon: <FaClipboardList /> },
+  ];
+
+  const handleAddPoint = async () => {
+    if (!newPoint.trim()) return;
+
+    const pointData = {
+      content: newPoint,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'ideas', currentIdea?.id || '', 'points'), pointData);
+      setPoints([...points, { id: docRef.id, ...pointData }]);
+      setNewPoint('');
+      enqueueSnackbar('הנקודה נוספה בהצלחה', { variant: 'success' });
+    } catch (error) {
+      console.error('Error adding point:', error);
+      enqueueSnackbar('שגיאה בהוספת הנקודה', { variant: 'error' });
+    }
+  };
+
+  // Load points when idea is opened
+  useEffect(() => {
+    if (currentIdea) {
+      const loadPoints = async () => {
+        try {
+          const pointsRef = collection(db, 'ideas', currentIdea.id, 'points');
+          const querySnapshot = await getDocs(pointsRef);
+          const fetchedPoints = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as IdeaPoint[];
+          setPoints(fetchedPoints);
+        } catch (error) {
+          console.error('Error loading points:', error);
+        }
+      };
+      loadPoints();
+    }
+  }, [currentIdea]);
+
   return (
-    <Box sx={{ p: 3, backgroundColor: 'background.paper', minHeight: '100vh' }} dir="rtl">
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => {
-              setCurrentIdea(null);
-              setTitle('');
-              setContent('');
-              setType('feature');
-              setCategory('');
-              setBackgroundColor('#ffffff');
-              setOpenDialog(true);
-            }}
-            startIcon={<AddIcon />}
-          >
-            רעיון חדש
-          </Button>
+    <Box sx={{ p: 3, backgroundColor: '#252525', minHeight: '100vh', borderRadius: '20px' }} dir="rtl">
+      {/* Header Section */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 4,
+          background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
+          borderRadius: '15px',
+          padding: '20px',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <FaLightbulb size={24} style={{ color: '#ec5252' }} />
+          <Typography variant="h5" sx={{ 
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '1.5rem'
+          }}>
+            רעיונות
+          </Typography>
+        </Box>
 
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => handleSort('title')}
-              className={sortBy === 'title' ? 'text-red-500' : ''}
-              endIcon={sortBy === 'title' ? (sortOrder === 'asc' ? '↑' : '↓') : null}
-            >
-              מיין לפי כותרת
-            </Button>
-            <Button
-              onClick={() => handleSort('category')}
-              className={sortBy === 'category' ? 'text-red-500' : ''}
-              endIcon={sortBy === 'category' ? (sortOrder === 'asc' ? '↑' : '↓') : null}
-            >
-              מיין לפי קטגוריה
-            </Button>
-          </div>
-        </div>
+        <IconButton
+          onClick={handleAddIdea}
+          sx={{
+            backgroundColor: '#ec5252',
+            color: 'white',
+            width: '40px',
+            height: '40px',
+            '&:hover': {
+              backgroundColor: '#d64444'
+            },
+            transition: 'all 0.2s ease-in-out',
+           
+          }}
+        >
+          <FaPlus />
+        </IconButton>
+      </Box>
 
+      {/* Search and Filter Section */}
+      <Box sx={{ mb: 4, display: 'flex', gap: 2, alignItems: 'center' }}>
         <TextField
-          placeholder="חיפוש רעיונות..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="חיפוש רעיונות..."
           variant="outlined"
-          size="small"
+          fullWidth
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon />
+                <FaSearch style={{ color: '#666' }} />
               </InputAdornment>
             ),
+            sx: {
+              backgroundColor: '#1a1a1a',
+              borderRadius: '8px',
+              '& fieldset': {
+                borderColor: '#333',
+              },
+              '&:hover fieldset': {
+                borderColor: '#ec5252 !important',
+              },
+              '&.Mui-focused fieldset': {
+                borderColor: '#ec5252 !important',
+              },
+              color: 'white'
+            }
           }}
-          sx={{ minWidth: 200 }}
         />
+        
+        <IconButton 
+          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+          sx={{ 
+            color: 'white',
+            backgroundColor: '#1a1a1a',
+            '&:hover': {
+              backgroundColor: '#333'
+            }
+          }}
+        >
+          {sortOrder === 'asc' ? <FaSortAmountDown /> : <FaSortAmountUp />}
+        </IconButton>
       </Box>
 
-      {/* Categories and their ideas */}
-      {Object.entries(groupedIdeas).map(([category, categoryIdeas]) => (
+      {/* Ideas Grid */}
+      {Object.entries(groupedIdeas).map(([category, ideas]) => (
         <Box key={category} sx={{ mb: 4 }}>
-          <Box 
-            onClick={() => toggleCategory(category)}
-            sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              mb: 2,
-              backgroundColor: 'background.paper',
-              p: 2,
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              cursor: 'pointer',
-              transition: 'background-color 0.2s',
-              '&:hover': {
-                backgroundColor: 'background.default'
-              }
-            }}
-          >
-            <Typography variant="h6" component="h2" sx={{ 
-              fontWeight: 'bold',
-              color: 'primary.main',
+          <Box
+            sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 1
-            }}>
-              <FolderIcon />
+              justifyContent: 'space-between',
+              mb: 2,
+              cursor: 'pointer',
+              '&:hover': { opacity: 0.8 }
+            }}
+            onClick={() => toggleCategory(category)}
+          >
+            <Typography variant="h6" sx={{ color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+              {collapsedCategories.includes(category) ? <FaChevronLeft /> : <FaChevronDown />}
               {category}
-              <Chip 
-                label={categoryIdeas.length}
-                size="small"
-                color="primary"
-                sx={{ mr: 1 }}
-              />
+              <Typography component="span" sx={{ color: '#666', ml: 1 }}>
+                ({ideas.length})
+              </Typography>
             </Typography>
-            <IconButton
-              size="small"
-              sx={{
-                transform: collapsedCategories.includes(category) ? 'rotate(0deg)' : 'rotate(180deg)',
-                transition: 'transform 0.3s'
-              }}
-            >
-              <KeyboardArrowDownIcon />
-            </IconButton>
           </Box>
 
           <Collapse in={!collapsedCategories.includes(category)}>
-            <Grid container spacing={3}>
-              {categoryIdeas.map((idea) => (
-                <Grid item xs={12} sm={6} md={4} key={idea.id}>
-                  <StyledCard backgroundcolor={idea.backgroundColor}>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                        <Typography variant="h6" component="h3">
-                          {idea.title}
-                        </Typography>
-                        <Box>
-                          <Tooltip title="ערוך">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleEditIdea(idea)}
-                              sx={{ mr: 1 }}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="מחק">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleDelete(idea.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-
-                      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                        <Chip 
-                          label={getTypeLabel(idea.type)}
-                          size="small"
-                          color="primary"
-                        />
-                      </Box>
-
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {idea.content}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 3,
+                mt: 2
+              }}
+            >
+              {ideas.map((idea) => (
+                <Box
+                  key={idea.id}
+                  sx={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    border: '1px solid #333',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
+                      borderColor: '#ec5252'
+                    }
+                  }}
+                >
+                  <Box sx={{ p: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                      <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold', mb: 1 }}>
+                        {idea.title}
                       </Typography>
-                    </CardContent>
-                  </StyledCard>
-                </Grid>
+                      <IconButton
+                        onClick={() => handleEditIdea(idea)}
+                        sx={{ 
+                          color: '#666',
+                          '&:hover': { color: '#ec5252' }
+                        }}
+                      >
+                        <FaEdit />
+                      </IconButton>
+                    </Box>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography
+                        sx={{
+                          color: '#999',
+                          mb: 2,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          minHeight: '4.5em'
+                        }}
+                      >
+                        {truncateContent(idea.content)}
+                      </Typography>
+                      {idea.content.length > 500 && (
+                        <Button
+                          onClick={() => setDetailViewIdea(idea)}
+                          sx={{
+                            color: '#ec5252',
+                            padding: 0,
+                            minWidth: 'auto',
+                            textTransform: 'none',
+                            '&:hover': {
+                              backgroundColor: 'transparent',
+                              textDecoration: 'underline'
+                            }
+                          }}
+                        >
+                          קרא עוד...
+                        </Button>
+                      )}
+                    </Box>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Chip
+                        label={idea.type}
+                        sx={{
+                          backgroundColor: typeColors[idea.type],
+                          color: 'white',
+                          borderRadius: '6px',
+                          height: '24px'
+                        }}
+                      />
+                      <Typography sx={{ color: '#666', fontSize: '0.875rem' }}>
+                        {new Date(idea.createdAt).toLocaleDateString('he-IL')}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
               ))}
-            </Grid>
+            </Box>
           </Collapse>
         </Box>
       ))}
-      {openDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-          <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-red-600 to-red-400 p-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white flex items-center">
-                <AddIcon className="ml-4" />
-                {currentIdea ? 'ערוך רעיון' : 'צור רעיון חדש'}
-              </h2>
-              <button
-                onClick={() => setOpenDialog(false)}
-                className="text-white hover:bg-red-500/20 rounded-full p-2 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {detailViewIdea && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#2a2a2a] rounded-lg w-[900px] h-[600px] flex flex-col">
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex justify-between items-start">
+                <h2 className="text-xl font-bold text-white">{detailViewIdea.title}</h2>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleEditIdea(detailViewIdea)}
+                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <EditIcon />
+                    ערוך
+                  </button>
+                  <button
+                    onClick={() => setDetailViewIdea(null)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center mt-4">
+                <span 
+                  className="px-2 py-1 rounded text-sm"
+                  style={{ backgroundColor: typeColors[detailViewIdea.type], color: 'white' }}
+                >
+                  {detailViewIdea.type}
+                </span>
+                <span className="bg-[#3a3a3a] px-2 py-1 rounded text-gray-400">{detailViewIdea.category}</span>
+              </div>
             </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="col-span-2">
-                  <TextField
-                    autoFocus
-                    label="כותרת"
-                    fullWidth
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    dir="rtl"
-                    variant="outlined"
-                    className="bg-white"
-                  />
-                </div>
-
-                <FormControl fullWidth>
-                  <InputLabel id="type-label">סוג</InputLabel>
-                  <Select
-                    labelId="type-label"
-                    value={type}
-                    label="סוג"
-                    onChange={(e) => setType(e.target.value as Idea['type'])}
-                  >
-                    <MenuItem value="feature">פיצ׳ר חדש</MenuItem>
-                    <MenuItem value="improvement">שיפור</MenuItem>
-                    <MenuItem value="bug">באג</MenuItem>
-                    <MenuItem value="other">אחר</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth>
-                  <InputLabel id="category-label">קטגוריה</InputLabel>
-                  <Select
-                    labelId="category-label"
-                    value={category}
-                    label="קטגוריה"
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    {categories.map((cat) => (
-                      <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <div className="col-span-2">
-                  <FormControl fullWidth>
-                    <InputLabel id="background-label">צבע רקע</InputLabel>
-                    <Select
-                      labelId="background-label"
-                      value={backgroundColor}
-                      label="צבע רקע"
-                      onChange={(e) => setBackgroundColor(e.target.value)}
-                    >
-                      {backgroundColors.map((color) => (
-                        <MenuItem 
-                          key={color} 
-                          value={color}
-                          sx={{ 
-                            backgroundColor: color,
-                            '&:hover': { backgroundColor: color },
-                          }}
-                        >
-                          &nbsp;
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </div>
-
-                <div className="col-span-2">
-                  <TextField
-                    label="תוכן"
-                    fullWidth
-                    multiline
-                    rows={4}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    dir="rtl"
-                    variant="outlined"
-                    className="bg-white"
-                  />
-                </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="bg-[#1f1f1f] rounded-lg p-4 text-gray-300">
+                {detailViewIdea.content}
               </div>
-
-              <div className="flex gap-2">
-                <TextField
-                  label="קטגוריה חדשה"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  dir="rtl"
-                  variant="outlined"
-                  className="bg-white flex-1"
-                />
-                <Button
-                  onClick={handleAddCategory}
-                  variant="contained"
-                  color="primary"
-                  disabled={!newCategory || categories.includes(newCategory)}
-                  sx={{ minWidth: 'auto', px: 3 }}
-                >
-                  הוסף
-                </Button>
+            </div>
+            
+            <div className="p-6 border-t border-gray-700">
+              <div className="text-sm text-gray-500 text-right">
+                נוצר ב: {new Date(detailViewIdea.createdAt).toLocaleDateString('he-IL')}
               </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button 
-                  onClick={() => setOpenDialog(false)}
-                  variant="outlined"
-                  color="inherit"
-                >
-                  ביטול
-                </Button>
-                <Button 
-                  onClick={handleSave}
-                  variant="contained"
-                  color="primary"
-                  disabled={!title || !content}
-                >
-                  {currentIdea ? 'עדכן' : 'צור'} רעיון
-                </Button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
+      )}
+      {openDialog && (
+        <Dialog
+          open={openDialog}
+          onClose={() => setOpenDialog(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            style: {
+              backgroundColor: '#1a1a1a',
+              color: 'white',
+              height: '90vh',
+              margin: 0,
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          }}
+        >
+          <DialogTitle sx={{ p: 0, backgroundColor: '#252525' }}>
+            <div className="flex justify-between items-center p-4 border-b border-gray-800">
+              <IconButton
+                onClick={() => setOpenDialog(false)}
+                sx={{
+                  backgroundColor: '#ec5252',
+                  color: 'white',
+                  width: '32px',
+                  height: '32px',
+                  '&:hover': {
+                    backgroundColor: '#d64444'
+                  }
+                }}
+              >
+                <FaTimes size={14} />
+              </IconButton>
+              <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
+                {currentIdea ? 'עריכת רעיון' : 'רעיון חדש'}
+              </Typography>
+            </div>
+          </DialogTitle>
+
+          <DialogContent sx={{ p: 0, display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <div className="flex flex-1 overflow-hidden">
+              {/* Sidebar */}
+              <div className="w-48 bg-[#252525] border-l border-gray-800">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-3 px-4 py-3 text-right w-full transition-colors ${
+                      activeTab === tab.id ? 'bg-[#2a2a2a] border-l-2 border-[#ec5252]' : 'hover:bg-[#2a2a2a]'
+                    }`}
+                  >
+                    <span className={`text-gray-400`}>{tab.icon}</span>
+                    <span className={`flex-1 ${activeTab === tab.id ? 'text-[#ec5252]' : 'text-gray-400'}`}>
+                      {tab.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Content Area */}
+              <div className="flex-1 flex flex-col bg-[#1a1a1a] overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  {activeTab === 'details' && (
+                    <div className="p-6" dir="rtl">
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">כותרת</label>
+                          <div className="relative">
+                            <FaFolder className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="text"
+                              value={title}
+                              onChange={(e) => setTitle(e.target.value)}
+                              className="w-full bg-[#252525] text-white pl-10 pr-3 py-2.5 rounded-lg border border-gray-700 outline-none focus:border-[#ec5252] text-right"
+                              placeholder="הכנס כותרת רעיון"
+                              dir="rtl"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">תוכן</label>
+                          <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="תוכן הרעיון"
+                            rows={6}
+                            className="w-full bg-[#252525] text-white py-2.5 px-3 rounded-lg border border-gray-700 outline-none focus:border-[#ec5252] text-right resize-none"
+                            dir="rtl"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'additional' && (
+                    <div className="p-6" dir="rtl">
+                      <div className="space-y-6">
+                        {/* Type and Category Section */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">סוג</label>
+                            <div className="relative">
+                              <FaTag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                              <select
+                                value={type}
+                                onChange={(e) => setType(e.target.value as Idea['type'])}
+                                className="w-full bg-[#252525] text-white pl-10 pr-3 py-2.5 rounded-lg border border-gray-700 outline-none focus:border-[#ec5252] text-right appearance-none"
+                                dir="rtl"
+                              >
+                                <option value="feature">תכונה חדשה</option>
+                                <option value="improvement">שיפור</option>
+                                <option value="bug">באג</option>
+                                <option value="other">אחר</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">קטגוריה</label>
+                            <div className="relative">
+                              <FaList className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                              <select
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                className="w-full bg-[#252525] text-white pl-10 pr-3 py-2.5 rounded-lg border border-gray-700 outline-none focus:border-[#ec5252] text-right appearance-none"
+                                dir="rtl"
+                              >
+                                {categories.map((cat) => (
+                                  <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Points Section */}
+                        <div className="space-y-4">
+                          <label className="block text-sm font-medium text-gray-400">נקודות</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newPoint}
+                              onChange={(e) => setNewPoint(e.target.value)}
+                              placeholder="הוסף נקודה חדשה..."
+                              className="flex-1 bg-[#252525] text-white py-2.5 px-3 rounded-lg border border-gray-700 outline-none focus:border-[#ec5252] text-right"
+                              dir="rtl"
+                            />
+                            <button
+                              onClick={handleAddPoint}
+                              className="bg-[#ec5252] text-white w-10 h-10 rounded-full hover:bg-[#d64444] transition-all flex items-center justify-center"
+                            >
+                              <FaPlus className="text-white" />
+                            </button>
+                          </div>
+
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                            {points.map((point) => (
+                              <div
+                                key={point.id}
+                                className="bg-[#252525] p-3 rounded-lg border border-gray-700 flex justify-between items-start group hover:border-[#ec5252] transition-colors"
+                              >
+                                <p className="text-gray-300 flex-1 text-right">{point.content}</p>
+                                <button
+                                  onClick={() => {
+                                    deleteDoc(doc(db, 'ideas', currentIdea?.id || '', 'points', point.id));
+                                    setPoints(points.filter(p => p.id !== point.id));
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <FaTrash />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2, backgroundColor: '#252525', borderTop: '1px solid', borderColor: 'rgba(75, 75, 75, 0.3)' }}>
+            <Button
+              onClick={() => setOpenDialog(false)}
+              variant="outlined"
+              sx={{
+                color: 'gray',
+                borderColor: 'gray',
+                '&:hover': {
+                  borderColor: 'white',
+                  color: 'white',
+                },
+              }}
+              startIcon={<FaTimes />}
+            >
+              ביטול
+            </Button>
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              sx={{
+                bgcolor: '#ec5252',
+                '&:hover': {
+                  bgcolor: '#d64444',
+                },
+              }}
+              startIcon={<FaCheck />}
+            >
+              {currentIdea ? 'עדכן' : 'צור'} רעיון
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
     </Box>
   );

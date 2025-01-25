@@ -195,61 +195,155 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     switch (activeTab) {
       case 'details':
         return (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-gray-400 mb-1">כותרת</label>
-              <div className="relative">
-                <FaTasks className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={taskState.title}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
-                  className={`w-full bg-[#2a2a2a] text-white pr-10 pl-4 py-2 rounded-lg focus:outline-none focus:ring-2 ${formErrors.title ? 'border-2 border-red-500' : 'focus:ring-red-500'}`}
-                  placeholder="הזן כותרת משימה"
-                />
-              </div>
-            </div>
+          <div className="space-y-6" dir="rtl">
+            <div className="bg-[#2a2a2a] rounded-lg p-4">
+              <h3 className="text-xl font-semibold mb-4 text-white text-right">מידע בסיסי</h3>
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-gray-400 mb-1 text-right">כותרת</label>
+                  <div className="relative">
+                    <FaTasks className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={taskState.title}
+                      onChange={(e) => handleInputChange('title', e.target.value)}
+                      className={`w-full bg-[#333333] text-white pl-10 pr-3 py-2 rounded-lg outline-none focus:ring-2 ${
+                        formErrors.title ? 'ring-2 ring-red-500' : 'focus:ring-[#ec5252]'
+                      } text-right`}
+                      placeholder="הכנס כותרת משימה"
+                      dir="rtl"
+                    />
+                    {formErrors.title && <p className="text-red-500 text-sm mt-1 text-right">{formErrors.title}</p>}
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-gray-400 mb-1">תיאור</label>
-              <textarea
-                value={taskState.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                className="w-full bg-[#2a2a2a] text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[100px]"
-                placeholder="הזן תיאור משימה"
-              />
-            </div>
+                <div>
+                  <label className="block text-gray-400 mb-1 text-right">סטטוס</label>
+                  <Listbox value={taskState.status} onChange={(value) => handleInputChange('status', value)}>
+                    <div className="relative">
+                      <Listbox.Button className="relative w-full bg-[#333333] text-white pr-3 pl-10 py-2 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-[#ec5252]">
+                        <span className="block truncate">{taskState.status}</span>
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                          <FaChevronDown className="h-4 w-4 text-gray-400" />
+                        </span>
+                      </Listbox.Button>
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-100"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Listbox.Options className="absolute z-10 mt-1 w-full bg-[#333333] rounded-md shadow-lg max-h-60 overflow-auto focus:outline-none">
+                          {[
+                            { value: 'לביצוע', label: 'לביצוע', color: 'bg-red-500/20 text-red-500' },
+                            { value: 'בתהליך', label: 'בתהליך', color: 'bg-yellow-500/20 text-yellow-500' },
+                            { value: 'הושלם', label: 'הושלם', color: 'bg-green-500/20 text-green-500' }
+                          ].map((status, index) => (
+                            <Listbox.Option
+                              key={`status-option-${index}`}
+                              value={status.value}
+                              className={({ active }) =>
+                                `${active ? 'bg-[#444444]' : ''} cursor-pointer select-none relative py-2 pr-10 pl-4`
+                              }
+                            >
+                              {({ selected }) => (
+                                <>
+                                  <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {status.label}
+                                  </span>
+                                  {selected && (
+                                    <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-red-500">
+                                      <FaCheck className="h-4 w-4" />
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                </div>
 
-            <div>
-              <label className="block text-gray-400 mb-1">דחיפות</label>
-              <div className="flex space-x-2">
-                {['נמוכה', 'בינונית', 'גבוהה'].map((urgent) => (
-                  <button
-                    key={urgent}
-                    type="button"
-                    onClick={() => handleInputChange('urgent', urgent)}
-                    className={`px-4 py-2 rounded-md flex items-center space-x-2 ${
-                      mapUrgencyToHebrew(taskState.urgent) === urgent
-                        ? 'bg-red-600 text-white'
-                        : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333333]'
-                    }`}
-                  >
-                    {urgent}
-                  </button>
-                ))}
-              </div>
-            </div>
+                <div>
+                  <label className="block text-gray-400 mb-1 text-right">דחיפות</label>
+                  <Listbox value={taskState.urgent} onChange={(value) => handleInputChange('urgent', value)}>
+                    <div className="relative">
+                      <Listbox.Button className="relative w-full bg-[#333333] text-white pr-3 pl-10 py-2 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-[#ec5252]">
+                        <span className="block truncate">{taskState.urgent}</span>
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                          <FaChevronDown className="h-4 w-4 text-gray-400" />
+                        </span>
+                      </Listbox.Button>
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-100"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Listbox.Options className="absolute z-10 mt-1 w-full bg-[#333333] rounded-md shadow-lg max-h-60 overflow-auto focus:outline-none">
+                          {[
+                            { value: 'נמוכה', label: 'נמוכה', color: 'bg-green-500/20 text-green-500' },
+                            { value: 'בינונית', label: 'בינונית', color: 'bg-yellow-500/20 text-yellow-500' },
+                            { value: 'גבוהה', label: 'גבוהה', color: 'bg-red-500/20 text-red-500' }
+                          ].map((urgency, index) => (
+                            <Listbox.Option
+                              key={`urgency-option-${index}`}
+                              value={urgency.value}
+                              className={({ active }) =>
+                                `${active ? 'bg-[#444444]' : ''} cursor-pointer select-none relative py-2 pr-10 pl-4`
+                              }
+                            >
+                              {({ selected }) => (
+                                <>
+                                  <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {urgency.label}
+                                  </span>
+                                  {selected && (
+                                    <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-red-500">
+                                      <FaCheck className="h-4 w-4" />
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                </div>
 
-            <div>
-              <label className="block text-gray-400 mb-1">תאריך יעד</label>
-              <div className="relative">
-                <FaCalendarAlt className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="datetime-local"
-                  value={taskState.dueDate ? taskState.dueDate.toString().slice(0, 16) : ''}
-                  onChange={(e) => handleInputChange('dueDate', e.target.value)}
-                  className="w-full bg-[#2a2a2a] text-white pr-10 pl-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
+                <div>
+                  <label className="block text-gray-400 mb-1 text-right">תאריך יעד</label>
+                  <div className="relative">
+                    <FaCalendarAlt className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="date"
+                      value={taskState.dueDate 
+                        ? (typeof taskState.dueDate === 'object' && 'toDate' in taskState.dueDate 
+                            ? taskState.dueDate.toDate() 
+                            : new Date(taskState.dueDate)
+                          ).toISOString().split('T')[0] 
+                        : ''}
+                      onChange={(e) => handleInputChange('dueDate', e.target.value)}
+                      className="w-full bg-[#333333] text-white p-2 rounded-lg outline-none focus:ring-2 focus:ring-[#ec5252] text-right"
+                      dir="rtl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 mb-1 text-right">תיאור</label>
+                  <textarea
+                    value={taskState.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    className="w-full bg-[#333333] text-white p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[100px] text-right"
+                    placeholder="הכנס תיאור משימה"
+                    dir="rtl"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -258,13 +352,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       case 'assignee':
         return (
           <div className="space-y-4">
-            <div>
-              <label className="block text-gray-400 mb-1">משתמשים מוקצים</label>
+            <div className="bg-[#2a2a2a] rounded-lg p-4">
+              <h3 className="text-xl font-semibold mb-4 text-white text-right">משתמשים מוקצים</h3>
               <div className="space-y-2">
                 {users.map((user) => (
                   <div
                     key={user.id || `temp-${crypto.randomUUID()}`}
-                    className="flex items-center justify-between bg-[#2a2a2a] p-2 rounded-lg cursor-pointer hover:bg-[#333333]"
+                    className="flex items-center justify-between bg-[#333333] p-3 rounded-lg cursor-pointer hover:bg-[#444444] transition-colors"
                     onClick={() => {
                       const newAssignedTo = taskState.assignedTo.includes(user.id)
                         ? taskState.assignedTo.filter(id => id !== user.id)
@@ -273,16 +367,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                      <div className="w-8 h-8 bg-[#1f1f1f] rounded-full flex items-center justify-center">
                         <FaUser className="text-red-500" />
                       </div>
-                      <div>
+                      <div className="text-right">
                         <h4 className="text-white font-medium">{user.name}</h4>
                         <p className="text-gray-400 text-sm">{user.email}</p>
                       </div>
                     </div>
                     {taskState.assignedTo.includes(user.id) && (
-                      <FaCheck className="text-red-500" />
+                      <FaCheck className="text-red-500 h-5 w-5" />
                     )}
                   </div>
                 ))}
@@ -293,104 +387,135 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
       case 'project':
         return (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-gray-400 mb-1">פרויקט</label>
-              <Listbox
-                value={taskState.project?.id || ''}
-                onChange={(value) => {
-                  const project = projects.find(p => p.id === value);
-                  handleInputChange('project', value);
-                  handleInputChange('project', project);
-                }}
-              >
-                <div className="relative">
-                  <Listbox.Button className="relative w-full cursor-default rounded-lg bg-[#2a2a2a] py-2 pl-3 pr-10 text-right text-white">
-                    <span className="block truncate">
-                      {taskState.project?.name || 'בחר פרויקט'}
-                    </span>
-                  </Listbox.Button>
-                  <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-md bg-[#2a2a2a] py-1">
-                    {projects.map((project) => (
-                      <Listbox.Option
-                        key={project.id || `temp-${crypto.randomUUID()}`}
-                        value={project.id}
-                        className={({ active }) =>
-                          `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                            active ? 'bg-red-600 text-white' : 'text-gray-400'
-                          }`
-                        }
-                      >
-                        {({ selected }) => (
-                          <>
-                            <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                              {project.name || 'Unnamed Project'}
+          <div className="space-y-5" dir="rtl">
+            <div className="bg-[#2a2a2a] rounded-lg p-6">
+              <h3 className="text-xl font-semibold mb-4 text-white text-right">בחירת פרויקט</h3>
+              <div>
+                <label className="block text-gray-400 mb-2 text-right">פרויקט</label>
+                <Listbox value={taskState.project?.id} onChange={(value) => handleInputChange('project', value)}>
+                  <div className="relative">
+                    <Listbox.Button className="relative w-full bg-[#333333] text-white pr-3 pl-10 py-3 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[45px]">
+                      <span className="block truncate">
+                        {taskState.project ? (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <span key={`project-${taskState.project.id}`} className="inline-flex items-center bg-red-500/20 text-red-400 text-sm px-2 py-1 rounded">
+                              {projects.find(p => p.id === taskState.project?.id)?.name || 'פרויקט לא נמצא'}
                             </span>
-                            {selected && (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-white">
-                                <FaCheck className="h-5 w-5" />
-                              </span>
-                            )}
-                          </>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">בחר פרויקט...</span>
                         )}
-                      </Listbox.Option>
-                    ))}
-                  </Listbox.Options>
-                </div>
-              </Listbox>
+                      </span>
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                        <FaChevronDown className="h-4 w-4 text-gray-400" />
+                      </span>
+                    </Listbox.Button>
+                    <Transition
+                      as={Fragment}
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100"
+                      leaveTo="opacity-0"
+                    >
+                      <Listbox.Options className="absolute z-10 mt-1 w-full bg-[#333333] rounded-lg shadow-lg max-h-60 overflow-auto focus:outline-none py-1">
+                        {projects.map((project, index) => (
+                          <Listbox.Option
+                            key={`project-option-${index}`}
+                            value={project.id}
+                            className={({ active, selected }) =>
+                              `${active ? 'bg-[#3a3a3a]' : ''} 
+                               ${selected ? 'bg-red-500/10' : ''} 
+                               cursor-pointer select-none relative py-2 px-4 text-right transition-colors duration-200`
+                            }
+                          >
+                            {({ selected }) => (
+                              <div className="flex items-center justify-between">
+                                <span className={`${selected ? 'text-red-400' : 'text-white'} flex items-center gap-2`}>
+                                  {selected && <FaCheck className="h-4 w-4" />}
+                                </span>
+                                <span className={`block truncate ${selected ? 'text-red-400 font-medium' : 'text-white'}`}>
+                                  {project.name}
+                                </span>
+                              </div>
+                            )}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </Transition>
+                  </div>
+                </Listbox>
+              </div>
             </div>
           </div>
         );
 
       case 'customer':
         return (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-gray-400 mb-1">לקוחות</label>
-              <Listbox
-                value={taskState.customers?.map(c => c.id) || []}
-                onChange={(value) => {
-                  const selectedCustomers = customers.filter(c => value.includes(c.id));
-                  handleInputChange('customers', selectedCustomers);
-                }}
-                multiple
-              >
-                <div className="relative mt-1">
-                  <Listbox.Button className="relative w-full cursor-default rounded-lg bg-[#2a2a2a] py-2 pl-3 pr-10 text-right text-white">
-                    <span className="block truncate">
-                      {taskState.customers?.length
-                        ? taskState.customers.map(c => c.name || 'לקוח ללא שם').join(', ')
-                        : 'בחר לקוחות'}
-                    </span>
-                  </Listbox.Button>
-                  <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-[#2a2a2a] py-1">
-                    {customers.map((customer) => (
-                      <Listbox.Option
-                        key={customer.id || `temp-${crypto.randomUUID()}`}
-                        value={customer.id}
-                        className={({ active }) =>
-                          `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                            active ? 'bg-red-600 text-white' : 'text-gray-400'
-                          }`
-                        }
-                      >
-                        {({ selected }) => (
-                          <>
-                            <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                              {customer.name || 'Unnamed Customer'}
-                            </span>
-                            {selected && (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-white">
-                                <FaCheck className="h-5 w-5" />
+          <div className="space-y-5" dir="rtl">
+            <div className="bg-[#2a2a2a] rounded-lg p-6">
+              <h3 className="text-xl font-semibold mb-4 text-white text-right">בחירת לקוחות</h3>
+              <div>
+                <label className="block text-gray-400 mb-2 text-right">לקוחות נבחרים</label>
+                <Listbox 
+                  value={taskState.customers?.map(customer => customer.id) || []} 
+                  onChange={(selectedValues: string[]) => {
+                    const selectedCustomers = customers.filter(c => selectedValues.includes(c.id));
+                    handleInputChange('customers', selectedCustomers);
+                  }}
+                  multiple
+                >
+                  <div className="relative">
+                    <Listbox.Button className="relative w-full bg-[#333333] text-white pr-3 pl-10 py-3 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[45px]">
+                      <span className="block truncate">
+                        {taskState.customers && taskState.customers.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            {taskState.customers.map((customer) => (
+                              <span key={`selected-${customer.id}`} className="inline-flex items-center bg-red-500/20 text-red-400 text-sm px-2 py-1 rounded">
+                                {customer.name}
                               </span>
-                            )}
-                          </>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">בחר לקוחות...</span>
                         )}
-                      </Listbox.Option>
-                    ))}
-                  </Listbox.Options>
-                </div>
-              </Listbox>
+                      </span>
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                        <FaChevronDown className="h-4 w-4 text-gray-400" />
+                      </span>
+                    </Listbox.Button>
+                    <Transition
+                      as={Fragment}
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100"
+                      leaveTo="opacity-0"
+                    >
+                      <Listbox.Options className="absolute z-10 mt-1 w-full bg-[#333333] rounded-lg shadow-lg max-h-60 overflow-auto focus:outline-none py-1">
+                        {customers.map((customer, index) => (
+                          <Listbox.Option
+                            key={`customer-option-${index}`}
+                            value={customer.id}
+                            className={({ active, selected }) =>
+                              `${active ? 'bg-[#3a3a3a]' : ''} 
+                               ${selected ? 'bg-red-500/10' : ''} 
+                               cursor-pointer select-none relative py-2 px-4 text-right transition-colors duration-200`
+                            }
+                          >
+                            {({ selected }) => (
+                              <div className="flex items-center justify-between">
+                                <span className={`${selected ? 'text-red-400' : 'text-white'} flex items-center gap-2`}>
+                                  {selected && <FaCheck className="h-4 w-4" />}
+                                </span>
+                                <span className={`block truncate ${selected ? 'text-red-400 font-medium' : 'text-white'}`}>
+                                  {customer.name}
+                                </span>
+                              </div>
+                            )}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </Transition>
+                  </div>
+                </Listbox>
+              </div>
             </div>
           </div>
         );
@@ -398,47 +523,49 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       case 'subtasks':
         return (
           <div className="space-y-4">
-            <div>
+            <div className="bg-[#2a2a2a] rounded-lg p-4">
               <div className="flex justify-between items-center mb-4">
-                <label className="block text-gray-400">משימות משנה</label>
                 <button
-                  type="button"
                   onClick={() => setShowNewSubTaskForm(true)}
-                  className="flex items-center space-x-1 text-red-500 hover:text-red-400"
+                  className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
                 >
-                  <FaPlus className="h-4 w-4" />
+                  <FaPlus className="text-sm" />
                   <span>הוסף משימת משנה</span>
                 </button>
               </div>
 
               {showNewSubTaskForm && (
-                <div className="bg-[#2a2a2a] p-4 rounded-lg mb-4">
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={newSubTask.title}
-                      onChange={(e) => setNewSubTask({ ...newSubTask, title: e.target.value })}
-                      className="w-full bg-[#333333] text-white px-4 py-2 rounded-lg"
-                      placeholder="כותרת משימת משנה"
-                    />
-                    <textarea
-                      value={newSubTask.description}
-                      onChange={(e) => setNewSubTask({ ...newSubTask, description: e.target.value })}
-                      className="w-full bg-[#333333] text-white px-4 py-2 rounded-lg"
-                      placeholder="תיאור משימת משנה"
-                    />
-                    <div className="flex justify-end space-x-2">
+                <div className="bg-[#333333] rounded-lg p-4 mb-4">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-gray-400 mb-1 text-right">כותרת</label>
+                      <input
+                        type="text"
+                        value={newSubTask.title}
+                        onChange={(e) => setNewSubTask({ ...newSubTask, title: e.target.value })}
+                        className="w-full bg-[#2a2a2a] text-white p-2 rounded-lg outline-none focus:ring-2 focus:ring-[#ec5252] text-right"
+                        dir="rtl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 mb-1 text-right">תיאור</label>
+                      <textarea
+                        value={newSubTask.description}
+                        onChange={(e) => setNewSubTask({ ...newSubTask, description: e.target.value })}
+                        className="w-full bg-[#2a2a2a] text-white p-2 rounded-lg outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[100px] text-right"
+                        dir="rtl"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
                       <button
-                        type="button"
                         onClick={() => setShowNewSubTaskForm(false)}
-                        className="px-4 py-2 text-gray-400 hover:text-white"
+                        className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
                       >
                         ביטול
                       </button>
                       <button
-                        type="button"
                         onClick={handleAddSubTask}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
                       >
                         הוסף
                       </button>
@@ -449,23 +576,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
               <div className="space-y-2">
                 {taskState.subTasks?.map((subTask, index) => (
-                  <div key={subTask.id} className="bg-[#2a2a2a] p-4 rounded-lg">
+                  <div key={subTask.id} className="bg-[#333333] rounded-lg p-4">
                     <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-white font-medium">{subTask.title}</h4>
-                        <p className="text-gray-400 text-sm">{subTask.description}</p>
+                      <div className="flex-1">
+                        <h4 className="text-white font-medium text-right">{subTask.title}</h4>
+                        {subTask.description && (
+                          <p className="text-gray-400 mt-1 text-right">{subTask.description}</p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newSubTasks = [...(taskState.subTasks || [])];
-                          newSubTasks.splice(index, 1);
-                          handleInputChange('subTasks', newSubTasks);
-                        }}
-                        className="text-gray-400 hover:text-red-500"
-                      >
-                        <FaTimes className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -477,32 +595,44 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       case 'comments':
         return (
           <div className="space-y-4">
-            <div>
-              <label className="block text-gray-400 mb-1">הערות</label>
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className="w-full bg-[#2a2a2a] text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[100px]"
-                placeholder="הוסף הערה חדשה"
-              />
-              <button
-                type="button"
-                onClick={handleAddComment}
-                className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                הוסף הערה
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {taskState.comments?.map((comment) => (
-                <div key={comment.id} className="bg-[#2a2a2a] p-4 rounded-lg">
-                  <p className="text-white">{comment.text}</p>
-                  <p className="text-gray-400 text-sm mt-1">
-                    {comment.createdAt.toString()}
-                  </p>
+            <div className="bg-[#2a2a2a] rounded-lg p-4">
+              <div className="mb-4">
+                <div className="flex gap-2">
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="flex-1 bg-[#333333] text-white p-2 rounded-lg outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[100px] text-right"
+                    placeholder="הוסף הערה..."
+                    dir="rtl"
+                  />
+                  <button
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed h-fit"
+                  >
+                    <FaPlus />
+                  </button>
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-4">
+                {taskState.comments?.map((comment) => (
+                  <div key={comment.id} className="bg-[#333333] rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="text-white text-right">{comment.text}</p>
+                        <div className="flex justify-end items-center gap-2 mt-2">
+                          <span className="text-gray-400 text-sm">
+                            {comment.createdAt instanceof Timestamp
+                              ? comment.createdAt.toDate().toLocaleString('he-IL')
+                              : new Date(comment.createdAt).toLocaleString('he-IL')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );
@@ -524,7 +654,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black bg-opacity-25" />
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
@@ -538,46 +668,47 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-[#1a1a1a] p-6 text-right align-middle shadow-xl transition-all">
-                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-white mb-4">
-                  {task ? 'עריכת משימה' : 'משימה חדשה'}
-                </Dialog.Title>
+              <Dialog.Panel className="w-[900px] h-[600px] transform overflow-hidden rounded-2xl bg-[#1f1f1f] text-right align-middle shadow-xl transition-all">
+                <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                  <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-white">
+                    {task ? 'עריכת משימה' : 'משימה חדשה'}
+                  </Dialog.Title>
+                  <button
+                    type="button"
+                    className="bg-[#ec5252] text-white p-2 rounded-full hover:bg-red-700 transition-colors duration-200"
+                    onClick={onClose}
+                  >
+                    <FaTimes className="h-4 w-4" />
+                  </button>
+                </div>
 
-                <div className="flex space-x-4 mb-6">
-                  <div className="w-1/4 space-y-2">
-                    {tabs.map((tab) => (
+                <div className="flex flex-row gap-6 p-6 h-[calc(600px-140px)] overflow-hidden">
+                  <div className="w-1/4 space-y-3 overflow-y-auto custom-scrollbar">
+                    {tabs.map((tab, index) => (
                       <button
-                        key={tab.id}
+                        key={`tab-${index}`}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg text-right ${
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 outline-none ${
                           activeTab === tab.id
-                            ? 'bg-red-600 text-white'
-                            : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333333]'
+                            ? 'bg-red-500/10 text-red-400'
+                            : 'bg-[#2a2a2a] text-gray-400 hover:text-white hover:bg-[#333333]'
                         }`}
                       >
-                        <span className="ml-2">{tab.icon}</span>
+                        <span className="text-xl">{tab.icon}</span>
                         <span>{tab.label}</span>
                       </button>
                     ))}
                   </div>
-
-                  <div className="w-3/4 bg-[#1a1a1a] rounded-lg p-4">
+                  <div className="w-3/4 bg-[#1f1f1f] rounded-xl overflow-y-auto custom-scrollbar">
                     {renderTabContent()}
                   </div>
                 </div>
 
-                <div className="mt-4 flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="inline-flex justify-center rounded-md border border-transparent bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white hover:bg-[#333333] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-                  >
-                    ביטול
-                  </button>
+                <div className="flex justify-end m-4 pt-1 border-t border-gray-800">
                   <button
                     type="button"
                     onClick={handleSubmit}
-                    className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                    className="bg-[#ec5252] text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200"
                   >
                     {task ? 'עדכן משימה' : 'צור משימה'}
                   </button>
@@ -587,6 +718,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </div>
         </div>
       </Dialog>
+      
     </Transition>
   );
 };

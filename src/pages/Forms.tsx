@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -20,6 +20,11 @@ import {
   TableHead,
   TableRow,
   TablePagination,
+  CircularProgress,
+  Stack,
+  Chip,
+  CardContent,
+  Card,
 } from '@mui/material';
 import StyledSelect from '../components/StyledSelect';
 import {
@@ -156,110 +161,94 @@ const Forms: React.FC = () => {
     }
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files?.length) return;
-    
-    if (!currentUser) {
-      enqueueSnackbar('יש להתחבר למערכת כדי להעלות קבצים', { variant: 'error' });
-      return;
-    }
-
-    const file = event.target.files[0];
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain',
-      'text/csv',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'video/mp4',
-      'video/quicktime',
-      'video/x-msvideo'
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      enqueueSnackbar('סוג הקובץ אינו נתמך', { variant: 'error' });
-      return;
-    }
-
-    setSelectedFile(file);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-    
-    // Log auth state before upload
-    logAuthState(currentUser);
-    
-    if (!currentUser) {
-      enqueueSnackbar('יש להתחבר למערכת כדי להעלות קבצים', { 
-        variant: 'error',
-        anchorOrigin: { vertical: 'top', horizontal: 'center' }
-      });
-      return;
-    }
-
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      setLoading(true);
-      
-      const timestamp = Date.now();
-      const storagePath = `forms/${timestamp}_${selectedFile.name}`;
-      
-      // Log the upload attempt
-      console.log('Upload attempt:', {
-        fileName: selectedFile.name,
-        fileType: selectedFile.type,
-        fileSize: selectedFile.size,
-        path: storagePath,
-        userAuth: !!currentUser,
-        userEmail: currentUser.email
-      });
-      
-      enqueueSnackbar('מתחיל העלאת קובץ...', { variant: 'info' });
-      
-      // Use storageService instead of direct Firebase storage calls
-      const downloadUrl = await storageService.uploadFile(selectedFile, storagePath);
-      
-      const formDoc = {
-        name: selectedFile.name.split('.')[0],
-        fileUrl: storagePath,
-        fileName: `${timestamp}_${selectedFile.name}`,
-        fileType: selectedFile.type,
-        uploadedAt: timestamp,
-        size: selectedFile.size,
-        uploadedBy: currentUser.uid,
-        userEmail: currentUser.email || '',
-        category: selectedCategory,
+      const file = event.target.files?.[0];
+      if (!file) {
+        enqueueSnackbar('לא נבחר קובץ', { variant: 'warning' });
+        return;
+      }
+
+      // File size validation (max 10MB)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_FILE_SIZE) {
+        enqueueSnackbar('גודל הקובץ חייב להיות קטן מ-10MB', { variant: 'error' });
+        return;
+      }
+
+      // Allowed file types
+      const ALLOWED_TYPES = [
+        'application/pdf', 
+        'text/plain', 
+        'text/csv', 
+        'image/jpeg', 
+        'image/png', 
+        'image/gif',
+        'video/mp4'
+      ];
+
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        enqueueSnackbar('סוג קובץ לא נתמך', { variant: 'error' });
+        return;
+      }
+
+      // Sanitize filename
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._\u0590-\u05FF]/g, '_');
+      const fileExtension = sanitizedFileName.split('.').pop() || '';
+
+      // Determine category based on file type
+      const getCategoryFromType = (fileType: string) => {
+        switch (fileType) {
+          case 'application/pdf': return 'מסמכים משפטיים';
+          case 'text/plain': return 'מסמכים אישיים';
+          case 'text/csv': return 'טפסי מכירות';
+          case 'image/jpeg':
+          case 'image/png':
+          case 'image/gif': return 'תמונות';
+          case 'video/mp4': return 'סרטונים';
+          default: return 'אחר';
+        }
       };
 
-      await addDoc(collection(db, 'forms'), formDoc);
+      // Upload file to storage
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${sanitizedFileName}`;
+      const storagePath = `forms/${fileName}`;
       
-      enqueueSnackbar('הקובץ נשמר בהצלחה', { 
-        variant: 'success',
-        anchorOrigin: { vertical: 'top', horizontal: 'center' }
-      });
-    } catch (error: any) {
-      console.error('Error uploading file:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      const storage = getStorage();
+      const storageRef = ref(storage, storagePath);
+
+      // Upload the file
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Create document in Firestore
+      const newDoc: FormDocument = {
+        id: timestamp.toString(),
+        name: sanitizedFileName,
+        fileName: fileName,
+        fileUrl: storagePath,
+        fileType: file.type,
+        uploadedAt: timestamp,
+        uploadedBy: currentUser?.uid ?? '',
+        userEmail: currentUser?.email ?? '',
+        size: file.size,
+        category: getCategoryFromType(file.type),
+      };
+
+      // Add to Firestore
+      await addDoc(collection(db, 'forms'), newDoc);
       
-      if (error.code === 'storage/unauthorized') {
-        enqueueSnackbar('אין הרשאה להעלות קבצים. אנא וודא שהינך מחובר למערכת', { 
-          variant: 'error',
-          autoHideDuration: 5000
-        });
-      } else {
-        enqueueSnackbar(`שגיאה בהעלאת הקובץ: ${error.message}`, { 
-          variant: 'error',
-          autoHideDuration: 5000
-        });
-      }
-    } finally {
-      setLoading(false);
+      // Refresh documents
+      await loadDocuments();
+      
+      // Reset upload state
+      setUploadOpen(false);
+      
+      enqueueSnackbar('הקובץ הועלה בהצלחה', { variant: 'success' });
+    } catch (error) {
+      console.error('File upload error:', error);
+      enqueueSnackbar('שגיאה בהעלאת הקובץ', { variant: 'error' });
     }
   };
 
@@ -346,33 +335,39 @@ const Forms: React.FC = () => {
     }
   };
 
-  const handleDownload = async (doc: FormDocument) => {
+  const handleDownload = async (document: FormDocument) => {
     try {
+      // Validate document and user
+      if (!document || !currentUser) {
+        enqueueSnackbar('לא ניתן להוריד את הקובץ. אנא התחבר מחדש.', { variant: 'error' });
+        return;
+      }
+
+      // Get storage reference
       const storage = getStorage();
-      const fileRef = ref(storage, doc.fileUrl);
-      
-      // Get the blob directly instead of using fetch
+      const fileRef = ref(storage, document.fileUrl);
+
+      // Download the file
       const blob = await getBlob(fileRef);
+      
+      // Create download link
       const url = window.URL.createObjectURL(blob);
+      const link = globalThis.document.createElement('a');
+      link.href = url;
+      link.download = document.fileName;
       
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.name + (doc.fileType === 'text/plain' ? '.txt' : '.pdf');
-      document.body.appendChild(a);
-      a.click();
+      // Append to body, click, and remove
+      globalThis.document.body.appendChild(link);
+      link.click();
+      globalThis.document.body.removeChild(link);
+
+      // Clean up
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      enqueueSnackbar('הקובץ הורד בהצלחה', { 
-        variant: 'success',
-        anchorOrigin: { vertical: 'top', horizontal: 'center' }
-      });
+
+      enqueueSnackbar(`הקובץ ${document.fileName} הורד בהצלחה`, { variant: 'success' });
     } catch (error) {
-      console.error('Error downloading file:', error);
-      enqueueSnackbar('שגיאה בהורדת הקובץ', { 
-        variant: 'error',
-        anchorOrigin: { vertical: 'top', horizontal: 'center' }
-      });
+      console.error('Download error:', error);
+      enqueueSnackbar('שגיאה בהורדת הקובץ. אנא נסה שוב.', { variant: 'error' });
     }
   };
 
@@ -412,100 +407,66 @@ const Forms: React.FC = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedDocument) return;
-
     try {
-      // Update filename if changed
-      const fileExtension = selectedDocument.fileName.split('.').pop() || '';
-      const newFileName = `${editedFileName.trim()}.${fileExtension}`;
-      let updates: any = {};
-
-      if (newFileName !== selectedDocument.fileName) {
-        updates.fileName = newFileName;
+      // Validate inputs
+      if (!selectedDocument) {
+        enqueueSnackbar('לא נבחר מסמך לעריכה', { variant: 'warning' });
+        return;
       }
 
-      // Update content if it's a text file
-      if (selectedDocument.fileName.toLowerCase().endsWith('.txt') || selectedDocument.fileName.toLowerCase().endsWith('.csv')) {
-        try {
-          // Create a new Blob with the edited content
-          const blob = new Blob([editedContent], { type: 'text/plain' });
-          
-          // Create reference to the new file location
-          const storageRef = ref(storage, `forms/${newFileName}`);
-          
-          // Delete old file if name changed
-          if (newFileName !== selectedDocument.fileName) {
-            const oldFileRef = ref(storage, `forms/${selectedDocument.fileName}`);
-            try {
-              await deleteObject(oldFileRef);
-            } catch (error) {
-              console.error('Error deleting old file:', error);
-            }
-          }
-          
-          // Upload the new content
-          await uploadBytes(storageRef, blob);
-          
-          // Get the new URL
-          const newUrl = await getDownloadURL(storageRef);
-          updates.fileUrl = newUrl;
-        } catch (error) {
-          console.error('Error updating file content:', error);
-          throw new Error('Failed to update file content');
-        }
+      // Sanitize filename
+      const sanitizedFileName = editedFileName.replace(/[^a-zA-Z0-9._\u0590-\u05FF]/g, '_');
+
+      // Update document metadata in Firestore
+      const docRef = doc(db, 'forms', selectedDocument.id);
+      await updateDoc(docRef, {
+        name: sanitizedFileName,
+        fileName: `${sanitizedFileName}.${selectedDocument.fileName.split('.').pop()}`
+      });
+
+      // If it's a text file, update content in storage
+      if (selectedDocument.fileType === 'text/plain' || selectedDocument.fileType === 'text/csv') {
+        const storage = getStorage();
+        const fileRef = ref(storage, selectedDocument.fileUrl);
+        
+        // Create new blob with edited content
+        const blob = new Blob([editedContent], { type: selectedDocument.fileType });
+        await uploadBytes(fileRef, blob);
       }
 
-      // Update document in Firestore if there are any changes
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(doc(db, 'forms', selectedDocument.id), updates);
-      }
-
+      // Refresh documents
+      await loadDocuments();
+      
+      // Close modal
       setEditModalOpen(false);
-      setSelectedDocument(null);
-      setEditedFileName('');
-      setEditedContent('');
-      loadDocuments();
+      
       enqueueSnackbar('המסמך עודכן בהצלחה', { variant: 'success' });
     } catch (error) {
-      console.error('Error updating document:', error);
+      console.error('Edit document error:', error);
       enqueueSnackbar('שגיאה בעדכון המסמך', { variant: 'error' });
     }
   };
 
   const handleCreateFile = async () => {
     try {
-      if (!currentUser) {
-        enqueueSnackbar('יש להתחבר כדי ליצור קבצים', { variant: 'error' });
+      // Validate inputs
+      if (!newFileName || !newFileContent) {
+        enqueueSnackbar('אנא מלא את כל השדות', { variant: 'warning' });
         return;
       }
 
-      if (!newFileName) {
-        enqueueSnackbar('נא להזין שם קובץ', { variant: 'error' });
-        return;
-      }
+      // Sanitize filename
+      const sanitizedFileName = newFileName.replace(/[^a-zA-Z0-9_\u0590-\u05FF]/g, '_');
 
-      setLoading(true);
-
-      // Create file content
-      let blob;
-      let mimeType;
-      
-      if (fileType === 'txt') {
-        mimeType = 'text/plain';
-        blob = new Blob([newFileContent], { type: mimeType });
-      } else if (fileType === 'pdf') {
-        mimeType = 'application/pdf';
-        // For PDF, you might want to use a PDF library like jspdf
-        // For now, we'll just create a text-based PDF
-        blob = new Blob([newFileContent], { type: mimeType });
-      }
+      // Create blob from content
+      const blob = new Blob([newFileContent], { type: `text/${fileType}` });
 
       if (!blob) {
         throw new Error('Failed to create file blob');
       }
 
       const timestamp = Date.now();
-      const fileName = `${timestamp}_${newFileName}.${fileType}`;
+      const fileName = `${timestamp}_${sanitizedFileName}.${fileType}`;
       const storagePath = `forms/${fileName}`;
       
       // Get storage reference
@@ -519,15 +480,15 @@ const Forms: React.FC = () => {
       // Create the document in Firestore
       const newDoc: FormDocument = {
         id: timestamp.toString(),
-        name: newFileName,
+        name: sanitizedFileName,
         fileName: fileName,
         fileUrl: storagePath, // Store the storage path, not the download URL
-        fileType: mimeType,
+        fileType: `text/${fileType}`,
         uploadedAt: timestamp,
-        uploadedBy: currentUser.uid,
+        uploadedBy: currentUser?.uid ?? '',
         userEmail: currentUser?.email ?? '',
         size: blob.size,
-        category: selectedCategory || (fileType === 'txt' ? 'מסמך טקסט' : 'מסמך PDF'),
+        category: selectedCategory || 'מסמכים אישיים',
       };
 
       // Add to Firestore
@@ -705,7 +666,7 @@ const Forms: React.FC = () => {
           <StyledSelect
             value={categoryFilter}
             label="קטגוריה"
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onSelect={(value) => setCategoryFilter(value)}
           >
             <MenuItem value="">הכל</MenuItem>
             {categories.map((category) => (
@@ -718,7 +679,7 @@ const Forms: React.FC = () => {
           <StyledSelect
             value={fileTypeFilter}
             label="סוג קובץ"
-            onChange={(e) => setFileTypeFilter(e.target.value)}
+            onSelect={(value) => setFileTypeFilter(value)}
           >
             <MenuItem value="all">הכל</MenuItem>
             <MenuItem value="document">מסמכים</MenuItem>
@@ -827,20 +788,6 @@ const Forms: React.FC = () => {
         <DialogTitle>העלאת מסמך חדש</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel id="category-label">קטגוריה</InputLabel>
-              <StyledSelect
-                value={selectedCategory}
-                label="Category"
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                {categories.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </StyledSelect>
-            </FormControl>
             <Button
               component="label"
               variant="outlined"
@@ -851,7 +798,7 @@ const Forms: React.FC = () => {
               <input
                 type="file"
                 hidden
-                onChange={handleFileSelect}
+                onChange={handleFileUpload}
               />
             </Button>
             {selectedFile && (
@@ -863,9 +810,6 @@ const Forms: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setUploadOpen(false)}>ביטול</Button>
-          <Button onClick={handleUpload} color="primary" disabled={!selectedFile || !selectedCategory}>
-            העלה
-          </Button>
         </DialogActions>
       </Dialog>
 
@@ -912,8 +856,7 @@ const Forms: React.FC = () => {
               <InputLabel>סוג קובץ</InputLabel>
               <StyledSelect
                 value={fileType}
-                onChange={(e) => setFileType(e.target.value as 'txt' | 'pdf')}
-              >
+                onSelect={(value) => setFileType(value as 'txt' | 'pdf')} label={''}              >
                 <MenuItem value="txt">Text (.txt)</MenuItem>
                 <MenuItem value="pdf">PDF (.pdf)</MenuItem>
               </StyledSelect>

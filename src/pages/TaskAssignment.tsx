@@ -944,7 +944,7 @@ const TaskAssignment: React.FC = () => {
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#1a1a1a] text-gray-300"
                       >
                         <FaUser className="mr-1 text-gray-400" />
-                        {user.firstName || user.email || 'Unnamed User'}
+                        {`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unnamed User'}
                       </span>
                     ) : null;
                   })}
@@ -1019,7 +1019,7 @@ const TaskAssignment: React.FC = () => {
     selectedValues, 
     onChange, 
     placeholder = 'בחר אפשרויות', 
-    className = '',
+    className = 'z-40',
     onInteractionStart
   }: { 
     options: { value: string; label: string }[], 
@@ -1337,7 +1337,7 @@ const TaskAssignment: React.FC = () => {
                           {({ selected }) => (
                             <>
                               <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                {user.firstName || user.email}
+                                {`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'משתמש לא ידוע'}
                               </span>
                               {selected ? (
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600">
@@ -1479,7 +1479,7 @@ const TaskAssignment: React.FC = () => {
                   multiple
                 >
                   <div className="relative">
-                    <Listbox.Button className="relative w-full cursor-default rounded-lg bg-[#2a2a2a] py-2 pl-10 pr-3 text-right text-gray-300 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 sm:text-sm">
+                    <Listbox.Button className="relative w-full cursor-default rounded-lg bg-[#2a2a2a] py-2 pl-10 pr-3 text-right text-gray-300 border border-gray-700 z-50 focus:outline-none focus:ring-2 focus:ring-red-500 sm:text-sm">
                       <span className="block truncate">
                         {filters.status.length > 0
                           ? filters.status.map(status => getStatusText(status)).join(', ')
@@ -1540,9 +1540,10 @@ const TaskAssignment: React.FC = () => {
                           ? filters.assignedTo
                               .map(userId => {
                                 const user = users.find(u => u.id === userId);
+                                console.log('User object:', user); // Debug log
                                 return user 
-                                  ? `${user.firstName} ${user.lastName || ''}`
-                                  : userId;
+                                  ? user.name || 'משתמש לא ידוע'
+                                  : 'משתמש לא ידוע';
                               })
                               .join(', ')
                           : 'בחר משתמשים'}
@@ -1571,7 +1572,7 @@ const TaskAssignment: React.FC = () => {
                             {({ selected }) => (
                               <>
                                 <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                  {`${user.firstName} ${user.lastName || ''}`}
+                                  {user.name || 'משתמש לא ידוע'}
                                 </span>
                                 {selected ? (
                                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-red-500">
@@ -1605,7 +1606,7 @@ const TaskAssignment: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">פרויקט</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1 ">פרויקט</label>
                 <MultiSelectDropdown 
                   options={projects.map(project => ({ 
                     value: project.id, 
@@ -1656,8 +1657,8 @@ const TaskAssignment: React.FC = () => {
               <span key={userId} className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
                 <FaUser className="text-red-500" />
                 {users.find(u => u.id === userId)?.firstName && users.find(u => u.id === userId)?.lastName 
-                  ? `${users.find(u => u.id === userId)?.firstName} ${users.find(u => u.id === userId)?.lastName}`
-                  : users.find(u => u.id === userId)?.firstName || users.find(u => u.id === userId)?.email}
+                  ? `${users.find(u => u.id === userId)?.firstName} ${users.find(u => u.id === userId)?.lastName}`.trim()
+                  : users.find(u => u.id === userId)?.firstName || users.find(u => u.id === userId)?.name}
                 <button 
                   onClick={() => handleFilterChange('assignedTo', filters.assignedTo.filter(id => id !== userId))}
                   className="ml-1 hover:text-red-800"

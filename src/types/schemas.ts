@@ -78,6 +78,7 @@ export interface Task extends BaseEntity {
   links: string[];
   isFavorite: boolean;
   title: string;
+  subtitle?: string;
   description: string;
   status: 'לביצוע' | 'בתהליך' | 'הושלם' | string;
   urgent: 'נמוכה' | 'בינונית' | 'גבוהה' | string;

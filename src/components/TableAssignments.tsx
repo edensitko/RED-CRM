@@ -36,13 +36,15 @@ const urgencyOptions = [
 ];
 
 const columns = [
-  { key: 'title' as keyof Task, label: 'כותרת', width: 'w-96', editable: false },
+  
+  { key: 'no' as keyof Task, label: '', width: 'w-8',editable: false },
+  { key: 'title' as keyof Task, label: 'כותרת', width: 'w-40', editable: false },
   { key: 'status' as keyof Task, label: 'סטטוס', width: 'w-40', editable: true },
   { key: 'urgency' as keyof Task, label: 'דחיפות', width: 'w-40', editable: true },
   { key: 'dueDate' as keyof Task, label: 'תאריך יעד', width: 'w-40', editable: true },
-  { key: 'assignedTo' as keyof Task, label: 'אחראי', width: 'w-48', editable: true },
-  { key: 'customers' as keyof Task, label: 'לקוחות', width: 'w-48', editable: true },
-  { key: 'project' as keyof Task, label: 'פרויקט', width: 'w-48', editable: true },
+  { key: 'assignedTo' as keyof Task, label: 'אחראי', width: 'w-40', editable: true },
+  { key: 'customers' as keyof Task, label: 'לקוח', width: 'w-40', editable: true },
+  { key: 'project' as keyof Task, label: 'פרויקט', width: 'w-40', editable: true }
 ];
 
 const formatDate = (date: Date | string | Timestamp | null | undefined) => {
@@ -145,14 +147,15 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
     if (directValue !== undefined) {
       value = directValue;
     } else if (field === 'assignedTo') {
-      value = selectedUsers;
+      value = selectedUsers.filter(id => id !== 'none');
     } else if (field === 'customers') {
-      value = customers.filter(c => selectedCustomers.includes(c.id));
+      const selectedCustomer = customers.find(c => c.id === selectedCustomers[0]);
+      value = selectedCustomer ? [selectedCustomer] : [];
     } else if (field === 'project') {
       const selectedProjectObj = projects.find(p => p.id === selectedProject);
       value = selectedProjectObj || null;
     } else {
-      value = editValue;
+      value = editValue === 'none' ? '' : editValue;
     }
 
     await onTaskUpdate(taskId, { [field]: value });
@@ -172,7 +175,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
           return (
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <select
-                value={selectedUsers[0] || ''}
+                value={selectedUsers[0] || 'none'}
                 onChange={(e) => {
                   e.stopPropagation();
                   setSelectedUsers([e.target.value]);
@@ -180,7 +183,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 className="w-full bg-gray-700 text-white rounded p-1"
                 dir="rtl"
               >
-                <option key="default-user" value="">בחר אחראי</option>
+                <option key="select-user" value="none">בחר אחראי</option>
                 {users.map(user => (
                   <option key={user.id} value={user.id}>
                     {user.firstName && user.lastName 
@@ -205,14 +208,14 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
           return (
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <select
-                value={selectedCustomers[0] || ''}
+                value={selectedCustomers[0] || 'none'}
                 onChange={(e) => {
                   e.stopPropagation();
                   setSelectedCustomers([e.target.value]);
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option key="default-customer" value="">בחר לקוח</option>
+                <option key="select-customer" value="none">בחר לקוח</option>
                 {customers.map(customer => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name} {customer.lastName}
@@ -242,7 +245,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option key="default-project" value="">בחר פרויקט</option>
+                <option key="select-project" value="none">בחר פרויקט</option>
                 {projects.map(project => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -272,7 +275,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option key="default-status" value="">בחר סטטוס</option>
+                <option key="select-status" value="none">בחר סטטוס</option>
                 {statusOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -302,7 +305,7 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                 }}
                 className="w-full bg-gray-700 text-white rounded p-1"
               >
-                <option key="default-urgency" value="">בחר דחיפות</option>
+                <option key="select-urgency" value="none">בחר דחיפות</option>
                 {urgencyOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -412,21 +415,30 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
     }
 
     switch (column.key) {
-      case 'title':
+
+
+
+      case 'no':
         return (
-          <div className={`flex items-center justify-between ${column.width}`}>
-            <button
+          <div >
+            <button className="text-gray-400 hover:text-gray-300 bg-transparent rounded p-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onTaskSelect(task);
               }}
-              className="text-gray-400 hover:text-gray-300 transition-colors"
             >
-              <FaEdit className="w-4 h-4" />
+              <FaEdit className="w-4 h-4 cursor-pointer bg-transparent rounded hover:bg-gray-500 p-0 " />
             </button>
-            <span className="flex-1 text-right truncate">{task.title}</span>
           </div>
         );
+
+      case 'title':
+        return (
+          <div className={`flex items-center justify-between ${column.width}`}>
+            <span className="flex-1 text-right truncate">{task.title}</span>
+          </div>
+        ); 
+
 
       case 'assignedTo':
         const assignedUsers = task.assignedTo 
@@ -573,27 +585,11 @@ const TableAssignments: React.FC<TableAssignmentsProps> = ({
                   onTaskSelect(task);
                 }}
               >
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[0])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[1])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[2])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[3])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[4])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[5])}
-                </td>
-                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                  {renderCell(task, columns[6])}
-                </td>
+                {columns.map(column => (
+                  <td key={column.key} className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
+                    {renderCell(task, column)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

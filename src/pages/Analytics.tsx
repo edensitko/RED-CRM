@@ -32,6 +32,8 @@ interface Project {
   startDate: string;
   endDate: string;
   createdBy: string;
+  expenses?: number;
+  revenue?: number;
 }
 
 interface Task {
@@ -62,36 +64,36 @@ interface User {
 
 const STATUS_CONFIG = {
   'לביצוע': { 
-    color: 'bg-red-100 text-red-800', 
-    icon: <FaExclamationCircle className="text-red-500" />,
+    color: 'bg-red-900/50 text-red-200', 
+    icon: <FaExclamationCircle className="text-red-400" />,
     label: 'לביצוע'
   },
   'בתהליך': { 
-    color: 'bg-yellow-100 text-yellow-800', 
-    icon: <FaChartBar className="text-yellow-500" />,
+    color: 'bg-yellow-900/50 text-yellow-200', 
+    icon: <FaChartBar className="text-yellow-400" />,
     label: 'בתהליך'
   },
   'הושלם': { 
-    color: 'bg-green-100 text-green-800', 
-    icon: <FaCheckCircle className="text-green-500" />,
+    color: 'bg-green-900/50 text-green-200', 
+    icon: <FaCheckCircle className="text-green-400" />,
     label: 'הושלם'
   }
 };
 
 const PRIORITY_CONFIG = {
   'נמוכה': { 
-    color: 'bg-green-100 text-green-800', 
-    icon: <FaFlag className="text-green-500" />,
+    color: 'bg-green-900/50 text-green-200', 
+    icon: <FaFlag className="text-green-400" />,
     label: 'נמוכה'
   },
   'בינונית': { 
-    color: 'bg-yellow-100 text-yellow-800', 
-    icon: <FaFlag className="text-yellow-500" />,
+    color: 'bg-yellow-900/50 text-yellow-200', 
+    icon: <FaFlag className="text-yellow-400" />,
     label: 'בינונית'
   },
   'גבוהה': { 
-    color: 'bg-red-100 text-red-800', 
-    icon: <FaFlag className="text-red-500" />,
+    color: 'bg-red-900/50 text-red-200', 
+    icon: <FaFlag className="text-red-400" />,
     label: 'גבוהה'
   }
 };
@@ -236,16 +238,71 @@ const Analytics: React.FC = () => {
     };
   };
 
+  const calculateFinancialMetrics = () => {
+    const totalBudget = projects.reduce((sum, project) => sum + (project.budget || 0), 0);
+    const totalExpenses = projects.reduce((sum, project) => sum + (project.expenses || 0), 0);
+    const totalRevenue = projects.reduce((sum, project) => sum + (project.revenue || 0), 0);
+    const profit = totalRevenue - totalExpenses;
+    
+    const projectsWithProfit = projects.filter(project => 
+      (project.revenue || 0) - (project.expenses || 0) > 0
+    ).length;
+
+    const averageProjectBudget = totalBudget / (projects.length || 1);
+
+    // Only include statuses that exist in STATUS_CONFIG
+    const budgetByStatus = projects.reduce((acc, project) => {
+      if (project.status in STATUS_CONFIG) {
+        acc[project.status] = (acc[project.status] || 0) + (project.budget || 0);
+      }
+      return acc;
+    }, {} as Record<keyof typeof STATUS_CONFIG, number>);
+
+    return {
+      totalBudget,
+      totalExpenses,
+      totalRevenue,
+      profit,
+      projectsWithProfit,
+      averageProjectBudget,
+      budgetByStatus
+    };
+  };
+
+  const calculateProjectTimelines = () => {
+    const now = new Date();
+    const activeProjects = projects.filter(project => project.status !== 'הושלם');
+    
+    const projectsOnSchedule = activeProjects.filter(project => {
+      const endDate = new Date(project.endDate);
+      return endDate >= now;
+    }).length;
+
+    const projectsBehindSchedule = activeProjects.filter(project => {
+      const endDate = new Date(project.endDate);
+      return endDate < now;
+    }).length;
+
+    const averageProjectDuration = projects
+      .filter(project => project.status === 'הושלם')
+      .reduce((sum, project) => {
+        const start = new Date(project.startDate);
+        const end = new Date(project.endDate);
+        return sum + (end.getTime() - start.getTime());
+      }, 0) / (projects.filter(project => project.status === 'הושלם').length || 1);
+
+    return {
+      projectsOnSchedule,
+      projectsBehindSchedule,
+      averageProjectDuration: Math.round(averageProjectDuration / (1000 * 60 * 60 * 24)) // Convert to days
+    };
+  };
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8 animate-pulse" dir="rtl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-4"></div>
-              <div className="h-10 bg-gray-200 rounded w-3/4"></div>
-            </div>
-          ))}
+      <div className="min-h-screen bg-[#1a1a1a] text-white p-6">
+        <div className="flex items-center justify-center h-screen">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-[#ec5252]"></div>
         </div>
       </div>
     );
@@ -254,219 +311,262 @@ const Analytics: React.FC = () => {
   const userMetrics = calculateUserMetrics();
   const teamMetrics = calculateTeamMetrics();
   const generalMetrics = calculateGeneralMetrics();
+  const financialMetrics = calculateFinancialMetrics();
+  const timelineMetrics = calculateProjectTimelines();
 
   if (!userMetrics) return null;
 
   return (
-    <div className="container mx-auto px-4 py-8" dir="rtl">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <FaChartBar className="text-red-600" />
-          ניתוח נתונים
-        </h1>
-      </div>
-
-      {/* Personal Activity Section */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-          <FaUserClock className="text-blue-600" />
-          הפעילות שלי
-        </h2>
+    <div className="min-h-screen bg-[#1a1a1a] text-white p-6">
+      <div className="space-y-6">
+        {/* User Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">משימות שיצרתי היום</h2>
-              <FaClock className="text-blue-600 text-xl" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">משימות שלי</p>
+                <h3 className="text-2xl font-bold">{userMetrics.totalTasks}</h3>
+              </div>
+              <FaTasks className="text-[#ec5252] text-3xl" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{userMetrics.tasksCreatedToday}</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">פרויקטים שלי</p>
+                <h3 className="text-2xl font-bold">{userMetrics.totalProjects}</h3>
+              </div>
+              <FaProjectDiagram className="text-[#ec5252] text-3xl" />
+            </div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">משימות שהושלמו</h2>
-              <FaCheckCircle className="text-green-600 text-xl" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">לקוחות שלי</p>
+                <h3 className="text-2xl font-bold">{userMetrics.totalCustomers}</h3>
+              </div>
+              <FaUsers className="text-[#ec5252] text-3xl" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{userMetrics.completedTasks}</p>
-            <p className="text-sm text-gray-500 mt-2">מתוך {userMetrics.totalTasks} משימות</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">משימות שהוקצו לי</h2>
-              <FaListAlt className="text-yellow-600 text-xl" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">משימות שהתקבלו היום</p>
+                <h3 className="text-2xl font-bold">{userMetrics.tasksCreatedToday}</h3>
+              </div>
+              <FaCalendarAlt className="text-[#ec5252] text-3xl" />
             </div>
-            <p className="text-3xl font-bold text-gray-900">{userMetrics.assignedTasks}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">פרויקטים פעילים</h2>
-              <FaProjectDiagram className="text-red-600 text-xl" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{userMetrics.totalProjects}</p>
           </motion.div>
         </div>
-      </div>
 
-      {/* Team Activity Section */}
-      <div className="mb-12">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-          <FaUsers className="text-green-600" />
-          פעילות צוות
-        </h2>
+        {/* Team Stats */}
+        {teamMetrics && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Active Users */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
+            >
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <FaUserClock className="text-[#ec5252]" />
+                משתמשים פעילים
+              </h3>
+              <div className="flex items-center justify-between">
+                <div className="text-4xl font-bold">{teamMetrics.activeUsers}</div>
+                <div className="text-gray-400">מתוך {teamMetrics.totalUsers} משתמשים</div>
+              </div>
+            </motion.div>
+
+            {/* Task Distribution */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
+            >
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <FaListAlt className="text-[#ec5252]" />
+                חלוקת משימות
+              </h3>
+              <div className="space-y-4">
+                {teamMetrics.tasksByUser.map((user, index) => (
+                  <div key={user.userId} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-gray-300">{user.name}</p>
+                      <div className="w-full bg-gray-700 rounded-full h-2.5 mt-1">
+                        <div
+                          className="bg-[#ec5252] h-2.5 rounded-full"
+                          style={{
+                            width: `${(user.completedTasks / (user.tasksCount || 1)) * 100}%`,
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="ml-4 text-gray-400">
+                      {user.completedTasks}/{user.tasksCount}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Financial Analytics */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Budget Overview */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">סטטיסטיקת משתמשים</h2>
-              <FaUsers className="text-blue-600" />
-            </div>
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <FaChartBar className="text-[#ec5252]" />
+              סקירה פיננסית
+            </h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span>משתמשים פעילים</span>
-                <span className="font-bold text-green-600">{teamMetrics.activeUsers}</span>
+                <span className="text-gray-400">תקציב כולל</span>
+                <span className="text-2xl font-bold">₪{financialMetrics.totalBudget.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>סה"כ משתמשים</span>
-                <span className="font-bold">{teamMetrics.totalUsers}</span>
+                <span className="text-gray-400">הוצאות</span>
+                <span className="text-xl font-bold text-red-400">₪{financialMetrics.totalExpenses.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">הכנסות</span>
+                <span className="text-xl font-bold text-green-400">₪{financialMetrics.totalRevenue.toLocaleString()}</span>
+              </div>
+              <div className="pt-2 border-t border-gray-700">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">רווח</span>
+                  <span className={`text-2xl font-bold ${financialMetrics.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ₪{financialMetrics.profit.toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>
 
+          {/* Project Performance */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">ביצועי צוות</h2>
-              <FaTasks className="text-yellow-600" />
-            </div>
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <FaProjectDiagram className="text-[#ec5252]" />
+              ביצועי פרויקטים
+            </h3>
             <div className="space-y-4">
-              {teamMetrics.tasksByUser.map(user => (
-                <div key={user.userId} className="flex justify-between items-center">
-                  <span>{user.name}</span>
-                  <div className="flex gap-4">
-                    <span className="text-green-600">{user.completedTasks} הושלמו</span>
-                    <span className="text-gray-600">מתוך {user.tasksCount}</span>
-                  </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">פרויקטים רווחיים</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-green-400">{financialMetrics.projectsWithProfit}</span>
+                  <span className="text-gray-400">מתוך {projects.length}</span>
                 </div>
-              ))}
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">תקציב ממוצע לפרויקט</span>
+                <span className="text-xl font-bold">₪{Math.round(financialMetrics.averageProjectBudget).toLocaleString()}</span>
+              </div>
             </div>
           </motion.div>
         </div>
-      </div>
 
-      {/* General Stats Section */}
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-          <FaChartBar className="text-yellow-600" />
-          סטטיסטיקה כללית
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Project Status */}
+        {/* Project Timelines */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">סטטוס פרויקטים</h2>
-              <FaProjectDiagram className="text-red-600" />
-            </div>
-            <div className="space-y-3">
-              {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {config.icon}
-                    <span>{config.label}</span>
-                  </div>
-                  <span className="font-bold">
-                    {generalMetrics.projectsByStatus[status] || 0}
-                  </span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">פרויקטים בזמן</p>
+                <h3 className="text-2xl font-bold text-green-400">{timelineMetrics.projectsOnSchedule}</h3>
+              </div>
+              <FaCalendarAlt className="text-green-400 text-3xl" />
             </div>
           </motion.div>
 
-          {/* Task Status */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            transition={{ delay: 0.1 }}
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">סטטוס משימות</h2>
-              <FaTasks className="text-yellow-600" />
-            </div>
-            <div className="space-y-3">
-              {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {config.icon}
-                    <span>{config.label}</span>
-                  </div>
-                  <span className="font-bold">
-                    {generalMetrics.tasksByStatus[status] || 0}
-                  </span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">פרויקטים באיחור</p>
+                <h3 className="text-2xl font-bold text-red-400">{timelineMetrics.projectsBehindSchedule}</h3>
+              </div>
+              <FaClock className="text-red-400 text-3xl" />
             </div>
           </motion.div>
 
-          {/* Task Priority */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
-            className="bg-white rounded-2xl shadow-lg p-6"
+            transition={{ delay: 0.2 }}
+            className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">עדיפות משימות</h2>
-              <FaFlag className="text-blue-600" />
-            </div>
-            <div className="space-y-3">
-              {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
-                <div key={priority} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {config.icon}
-                    <span>{config.label}</span>
-                  </div>
-                  <span className="font-bold">
-                    {generalMetrics.tasksByPriority[priority] || 0}
-                  </span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 mb-1">משך פרויקט ממוצע</p>
+                <h3 className="text-2xl font-bold">{timelineMetrics.averageProjectDuration} ימים</h3>
+              </div>
+              <FaUserClock className="text-[#ec5252] text-3xl" />
             </div>
           </motion.div>
         </div>
+
+        {/* Budget Distribution */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-[#252525] p-6 rounded-lg shadow-lg border border-gray-800"
+        >
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <FaChartBar className="text-[#ec5252]" />
+            חלוקת תקציב לפי סטטוס
+          </h3>
+          <div className="grid grid-cols-3 gap-4">
+            {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+              <div key={status} className="bg-[#2a2a2a] p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  {config.icon}
+                  <span className="text-gray-400">{config.label}</span>
+                </div>
+                <span className="text-xl font-bold">
+                  ₪{(financialMetrics.budgetByStatus[status as keyof typeof STATUS_CONFIG] || 0).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </div>
   );
