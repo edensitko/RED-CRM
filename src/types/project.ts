@@ -1,4 +1,5 @@
-import { CustomerClass } from './customer';
+import { CustomerClass } from './schemas'
+import { Timestamp } from 'firebase/firestore';
 
 export type ProjectStatus = 'לביצוע' | 'בתהליך' | 'הושלם';
 
@@ -18,12 +19,12 @@ export class ProjectClass {
     budget: number;
     customerId: string;
     status: ProjectStatus;
-    startDate: string;
-    endDate: string;
+    startDate: Timestamp;
+    endDate: Timestamp | null;
     isFavorite: boolean;
-    createdAt: string;
+    createdAt: Timestamp;
     createdBy: string;
-    updatedAt: string;
+    updatedAt: Timestamp;
     updatedBy: string;
     isDeleted: boolean;
     deletedAt?: Date;
@@ -43,12 +44,12 @@ export class ProjectClass {
         this.budget = data.budget || 0;
         this.customerId = data.customerId || '';
         this.status = data.status || 'לביצוע';
-        this.startDate = data.startDate || new Date().toISOString().split('T')[0];
-        this.endDate = data.endDate || '';
+        this.startDate = data.startDate || Timestamp.now();
+        this.endDate = data.endDate || null;
         this.isFavorite = data.isFavorite || false;
-        this.createdAt = data.createdAt || new Date().toISOString();
+        this.createdAt = data.createdAt || Timestamp.now();
         this.createdBy = data.createdBy || '';
-        this.updatedAt = data.updatedAt || new Date().toISOString();
+        this.updatedAt = data.updatedAt || Timestamp.now();
         this.updatedBy = data.updatedBy || '';
         this.isDeleted = data.isDeleted || false;
         this.deletedAt = data.deletedAt;
@@ -71,8 +72,8 @@ export class ProjectClass {
         
         return new ProjectClass({
             ...data,
-            createdAt: data.createdAt || new Date().toISOString(),
-            updatedAt: data.updatedAt || new Date().toISOString(),
+            createdAt: data.createdAt || Timestamp.now(),
+            updatedAt: data.updatedAt || Timestamp.now(),
             status: data.status || 'לביצוע',
             assignedTo: data.assignedTo || [],
             tasks: data.tasks || [],

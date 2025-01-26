@@ -26,7 +26,7 @@ import {
   CardContent,
   Card,
 } from '@mui/material';
-import StyledSelect from '../components/StyledSelect';
+import StyledSelect from '../components/widgets/StyledSelect';
 import {
   CloudUpload as UploadIcon,
   Delete as DeleteIcon,

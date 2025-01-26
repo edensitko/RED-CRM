@@ -11,56 +11,45 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { User, AdminUser } from '../../types/schemas';
+import { User } from '../../types/schemas';
 
 const USERS_COLLECTION = 'users';
 
 export const userService = {
-  async createUser(user: User | AdminUser): Promise<void> {
+  async createUser(user: User ): Promise<void> {
     const userRef = doc(db, USERS_COLLECTION, user.id);
     await setDoc(userRef, {
       ...user,
-      createdAt: Timestamp.fromDate(user.createdAt),
-      updatedAt: Timestamp.fromDate(user.updatedAt),
-      lastLogin: user.lastLogin ? Timestamp.fromDate(user.lastLogin) : null,
-      hireDate: Timestamp.fromDate(user.hireDate),
+      updatedAt: Timestamp.fromDate(user.updatedAt.toDate()),
     });
   },
 
-  async updateUser(id: string, updates: Partial<User | AdminUser>): Promise<void> {
+  async updateUser(id: string, updates: Partial<User >): Promise<void> {
     const userRef = doc(db, USERS_COLLECTION, id);
     const updateData = { ...updates, updatedAt: Timestamp.fromDate(new Date()) };
     await updateDoc(userRef, updateData);
   },
 
-  async getUser(id: string): Promise<User | AdminUser | null> {
+  async getUser(id: string): Promise<User | null> {
     const userRef = doc(db, USERS_COLLECTION, id);
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) return null;
-    return userSnap.data() as User | AdminUser;
+    return userSnap.data() as User ;
   },
 
-  async getAllUsers(): Promise<(User | AdminUser)[]> {
+  async getAllUsers(): Promise<(User )[]> {
     const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
-    return usersSnap.docs.map(doc => doc.data() as User | AdminUser);
+    return usersSnap.docs.map(doc => doc.data() as User );
   },
 
-  async getAdminUsers(): Promise<AdminUser[]> {
-    const q = query(
-      collection(db, USERS_COLLECTION),
-      where('role', '==', 'admin')
-    );
-    const adminsSnap = await getDocs(q);
-    return adminsSnap.docs.map(doc => doc.data() as AdminUser);
-  },
 
-  async getActiveUsers(): Promise<(User | AdminUser)[]> {
+  async getActiveUsers(): Promise<(User )[]> {
     const q = query(
       collection(db, USERS_COLLECTION),
       where('isActive', '==', true)
     );
     const usersSnap = await getDocs(q);
-    return usersSnap.docs.map(doc => doc.data() as User | AdminUser);
+    return usersSnap.docs.map(doc => doc.data() as User);
   },
 
   async deleteUser(id: string): Promise<void> {
@@ -77,29 +66,16 @@ export const userService = {
     await deleteDoc(userRef);
   },
 
-  async updateUserPreferences(
-    id: string,
-    preferences: User['preferences']
-  ): Promise<void> {
-    const userRef = doc(db, USERS_COLLECTION, id);
-    await updateDoc(userRef, { preferences });
-  },
+ 
+ 
 
-  async updateUserTargets(
-    id: string,
-    targets: NonNullable<User['targets']>
-  ): Promise<void> {
-    const userRef = doc(db, USERS_COLLECTION, id);
-    await updateDoc(userRef, { targets });
-  },
-
-  async getUsersByDepartment(department: string): Promise<(User | AdminUser)[]> {
+  async getUsersByDepartment(department: string): Promise<(User)[]> {
     const q = query(
       collection(db, USERS_COLLECTION),
       where('department', '==', department),
       where('isActive', '==', true)
     );
     const usersSnap = await getDocs(q);
-    return usersSnap.docs.map(doc => doc.data() as User | AdminUser);
+    return usersSnap.docs.map(doc => doc.data() as User );
   },
 };

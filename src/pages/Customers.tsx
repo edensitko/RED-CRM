@@ -69,10 +69,9 @@ import { motion } from 'framer-motion';
 import { customerService } from '../services/firebase/customerService';
 import { projectService } from '../services/firebase/projectService';
 import { taskService } from '../services/firebase/taskService';
-import {  Project, Task } from '../types/schemas';
+import {  Project, Task ,CustomerClass} from '../types/schemas';
 import { useAuth } from '../hooks/useAuth';
 import { v4 as uuidv4 } from 'uuid';
-import { CustomerClass } from '../types/customer';
 import { 
   collection, 
   query, 
@@ -88,9 +87,9 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import ItemModal from '../components/modals/ItemModal';
-import CustomerDetails from '../components/CustomerDetails';
-import StyledSelect from '../components/StyledSelect';
+import ItemModal from '../components/modals/proj_item_modal';
+import CustomerDetails from '../components/modals/CustomerDetails';
+import StyledSelect from '../components/widgets/StyledSelect';
 import { CacheProvider } from '@emotion/react';
 import rtlPlugin from 'stylis-plugin-rtl';
 import { prefixer } from 'stylis';

@@ -1,8 +1,8 @@
 import { Timestamp } from 'firebase/firestore';
-import { CustomerClass } from './customer';
 
 export type FirebaseDate = Date | Timestamp;
 
+///////////////////////////// subtask ///////////////////////
 export interface SubTask {
   id: string;
   title: string;
@@ -16,6 +16,8 @@ export interface SubTask {
   completed: boolean;
 }
 
+///////////////////////////// minimal entity ///////////////////////
+
 export interface BaseEntity {
   id: string;
   createdAt: any;
@@ -27,6 +29,34 @@ export interface BaseEntity {
   deletedBy?: string;
 }
 
+/////////////////////////////  customer  ///////////////////////
+
+export interface CustomerClass {
+  id: string;
+  name: string;  
+  lastName: string;
+  companyName: string;  
+  assignedTo: string[];
+  Balance: number;
+  ComeFrom: string;
+  Comments: string[];
+  CreatedBy: string;
+  createdAt: string;
+  Email: string;
+  IsDeleted: boolean;
+  Links: Array<string | { url: string; description: string }>;
+  Phone: number;
+  Projects: string[];
+  Status: "פעיל" | "לא פעיל" | "בטיפול";
+  Tags: string[];
+  Tasks: string[];
+  Files: Array<{ name: string; url: string; uploadedAt: string; size: number }>;
+ subTasks: SubTask[];  
+}
+
+
+/////////////////////////////  user exetends ///////////////////////
+
 export interface User extends BaseEntity {
   email: string;
   name: string;
@@ -36,42 +66,16 @@ export interface User extends BaseEntity {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
-  profilePicture?: string;
-  department?: string;
   isActive?: boolean;
   displayName?: string;
-  avatar?: string;
-  position?: string;
-  preferences: {
-    language: 'he' | 'en';
-    theme: 'light' | 'dark';
-    notifications: boolean;
-    emailNotifications: boolean;
-  };
-  targets?: {
-    sales: number;
-    leads: number;
-    meetings: number;
-  };
+
+
 }
 
-export interface AdminUser extends User {
-  role: 'admin';
-  permissions: string[];
-  department: string;
-  managedDepartments: string[];
-  canManageUsers: boolean;
-  canManageRoles: boolean;
-  canViewReports: boolean;
-  canManageSettings: boolean;
-  emergencyContact?: {
-    name: string;
-    phone: string;
-    relation: string;
-  };
-}
 
-export interface Task extends BaseEntity {
+///////////////////////////// task ///////////////////////
+
+export interface Task {
   id: string;
   tasks: string[];
   files: string[];
@@ -101,6 +105,10 @@ export interface Task extends BaseEntity {
   completed?: boolean;
   completedAt?: Timestamp | null;
   isDeleted?: boolean;
+  createdAt?: Timestamp | null;
+
+
+  
 }
 
 export interface Project extends BaseEntity {
@@ -155,6 +163,8 @@ export interface Project extends BaseEntity {
   }>;
 }
 
+///////////////////////////// lead ///////////////////////
+
 export interface Lead extends BaseEntity {
   firstName: string;
   lastName: string;
@@ -190,6 +200,9 @@ export interface Lead extends BaseEntity {
   marketingCampaign?: string;
   referralSource?: string;
 }
+
+
+///////////////////////////// reports ///////////////////////
 
 export interface Report extends BaseEntity {
   title: string;
@@ -229,6 +242,9 @@ export interface Report extends BaseEntity {
   };
 }
 
+
+///////////////////////////// activity ///////////////////////
+
 export interface Activity extends BaseEntity {
   type: 'create' | 'update' | 'delete' | 'login' | 'export' | 'other';
   entityType: 'user' | 'customer' | 'lead' | 'task' | 'report';
@@ -240,6 +256,8 @@ export interface Activity extends BaseEntity {
   completedAt?: FirebaseDate;
   dueDate?: FirebaseDate;
 }
+
+///////////////////////////// item project  ///////////////////////
 
 export interface Item extends BaseEntity {
   name: string;
@@ -269,6 +287,8 @@ export interface Item extends BaseEntity {
   }>;
 }
 
+///////////////////////////// task customer ///////////////////////
+
 export interface TaskCustomer {
   id: any;
   name: string;  
@@ -296,3 +316,13 @@ export type Customer = {
   name: string;
   companyName: string;
 } & CustomerClass;
+
+///////////////////////////// task user ///////////////////////
+export interface TaskUser {
+  id: string;
+  email: string;
+  name?: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+}

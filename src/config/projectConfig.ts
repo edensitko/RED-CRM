@@ -4,19 +4,11 @@ export const PROJECT_STATUS_CONFIG = {
     color: 'gray',
   },
   IN_PROGRESS: {
-    label: 'In Progress',
+    label: 'בתהליך',
     color: 'blue',
   },
   COMPLETED: {
-    label: 'Completed',
+    label: 'הושלם',
     color: 'green',
   },
-  ON_HOLD: {
-    label: 'On Hold',
-    color: 'yellow',
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    color: 'red',
-  },
-};
+} as const;

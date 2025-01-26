@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CustomerClass } from '../../types/customer';
+import { CustomerClass } from '../../types/schemas';
 import { Dialog } from '@headlessui/react';
 import { 
   FaUser, FaEnvelope, FaPhone, FaBuilding

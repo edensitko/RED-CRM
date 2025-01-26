@@ -21,21 +21,19 @@ import Support from './pages/Support';
 import Workflows from './pages/Workflows';
 import Chat from './pages/Chat';
 import TaskAssignment from './pages/TaskAssignment';
-import TimeReports from './pages/TimeReports';
 import Forms from './pages/Forms';
 import Documents from './pages/Documents';
 import Reports from './pages/Reports';
 import Payments from './pages/Payments';
 import Settings from './pages/Settings';
-import WideScreenMessage from './pages/WideScreenMessage';
 import NotFound from './pages/NotFound'; 
+import WideScreenMessage from './styles/WideScreenMessage.tsx';
 import { useState, useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './store';
 import { SnackbarProvider } from 'notistack';
 import Ideas from './pages/Ideas';
-import StylesScreen from './styles/globalexample';
 import ChatPage from './pages/ChatPage';
 import { TimeTrackingPage } from './pages/TimeTrackingPage';
 
@@ -70,7 +68,6 @@ const routes = [
   { path: '/payments', element: <Payments /> },
   { path: '/settings', element: <Settings /> },
   { path: '/task-assignments', element: <TaskAssignment /> },
-  // { path: '/example', element: <StylesScreen /> },
   { path: '*', element: <NotFound /> },
 ];
 
@@ -81,7 +78,7 @@ function LoadingScreen() {
       justifyContent: 'center',
       alignItems: 'center',
       height: '100vh',
-      backgroundColor: 'red',
+      backgroundColor: 'black',
     }}>
       <div style={{
         display: 'flex',

@@ -39,17 +39,12 @@ export const authService = {
         role: userData.role || 'user',
         phoneNumber: userData.phoneNumber || '',
         isActive: true,
-        hireDate: now,
         createdAt: now,
         updatedAt: now,
         createdBy: user.uid,
         updatedBy: user.uid,
-        preferences: {
-          language: 'he',
-          theme: 'light',
-          notifications: true,
-          emailNotifications: true
-        }
+        name: '',
+        lastLogin: ''
       };
 
       await setDoc(doc(db, 'users', user.uid), userDoc);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTimeTracking } from '../contexts/TimeTrackingContext';
-import { CreateTimeEntryModal } from '../components/CreateTimeEntryModal';
+import { CreateTimeEntryModal } from '../components/modals/CreateTimeEntryModal';
 import { FaPlay, FaStop, FaClock, FaFilter } from 'react-icons/fa';
 
 export const TimeTrackingPage: React.FC = () => {
@@ -76,22 +76,22 @@ export const TimeTrackingPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4 max-w-4xl" dir="rtl">
-      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div className="bg-[#252525] rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">דיווחי זמן</h1>
+          <h1 className="text-2xl font-bold text-white">דיווחי זמן</h1>
           <div className="flex items-center space-x-4 space-x-reverse">
-            <div className="text-3xl font-mono">{formatTime(elapsedTime)}</div>
+            <div className="text-3xl font-mono text-white">{formatTime(elapsedTime)}</div>
             {!isTimerRunning ? (
               <button
                 onClick={handleStartTimer}
-                className="bg-green-500 text-white p-3 rounded-full hover:bg-green-600 transition-colors"
+                className="bg-green-600 text-white p-3 rounded-full hover:bg-green-700 transition-colors"
               >
                 <FaPlay />
               </button>
             ) : (
               <button
                 onClick={handleStopTimer}
-                className="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors"
+                className="bg-red-600 text-white p-3 rounded-full hover:bg-red-700 transition-colors"
               >
                 <FaStop />
               </button>
@@ -104,7 +104,7 @@ export const TimeTrackingPage: React.FC = () => {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="pl-8 pr-4 py-2 border rounded-lg focus:ring-red-500 focus:border-red-500 appearance-none"
+              className="pl-8 pr-4 py-2 bg-[#1a1a1a] border-gray-600 text-white rounded-lg focus:ring-red-500 focus:border-red-500 appearance-none"
             >
               <option value="">כל הקטגוריות</option>
               {categories.map((category) => (
@@ -121,18 +121,18 @@ export const TimeTrackingPage: React.FC = () => {
           {filteredEntries.map((entry) => (
             <div
               key={entry.id}
-              className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+              className="border border-gray-700 bg-[#1a1a1a] rounded-lg p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <h3 className="font-semibold">{entry.category}</h3>
-                  <p className="text-sm text-gray-600">{entry.description}</p>
+                  <h3 className="font-semibold text-white">{entry.category}</h3>
+                  <p className="text-sm text-gray-400">{entry.description}</p>
                 </div>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-400">
                   {formatTime(entry.duration)}
                 </span>
               </div>
-              <div className="flex items-center text-sm text-gray-500">
+              <div className="flex items-center text-sm text-gray-400">
                 <FaClock className="mr-1" />
                 <span>
                   {new Date(entry.startTime.toDate()).toLocaleTimeString('he-IL')} -{' '}

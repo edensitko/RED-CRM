@@ -1,23 +1,6 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  Timestamp,
-  DocumentData,
-  addDoc,
-  deleteDoc
-} from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, getDocs, query, where, Timestamp, getDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Task } from '../../types/schemas';
-import { activityService } from './activityService';
 
 const TASKS_COLLECTION = 'tasks';
 
@@ -41,7 +24,7 @@ const convertToTimestamp = (date: Date | string | Timestamp | null | undefined) 
   return null;
 };
 
-const convertTaskFromFirestore = (doc: DocumentData): Task => {
+const convertTaskFromFirestore = (doc: any): Task => {
   const data = doc.data();
   return {
     ...data,
@@ -62,90 +45,44 @@ const convertTaskFromFirestore = (doc: DocumentData): Task => {
 };
 
 export const taskService = {
-  async createTask(task: Task): Promise<void> {
-    const tasksRef = collection(db, TASKS_COLLECTION);
-    const now = serverTimestamp();
-    
-    const taskData = {
-      ...task,
-      createdAt: now,
-      updatedAt: now,
-      dueDate: convertToTimestamp(task.dueDate),
-      completedAt: convertToTimestamp(task.completedAt),
-      isDeleted: false,
-      deletedAt: null,
-      deletedBy: null,
-      updatedBy: task.createdBy,
-      comments: task.comments || [],
-      subTasks: task.subTasks || [],
-      customers: task.customers || [],
-      project: task.project || null,
-      completed: task.status === 'הושלם',
-      isFavorite: task.isFavorite || false
-    };
-
-    await addDoc(tasksRef, taskData);
-
-    await activityService.logActivity({
-      type: 'create',
-      entityType: 'task',
-      entityId: task.id,
-      description: 'יצירת משימה חדשה',
-      createdBy: task.createdBy,
-      metadata: {
-        taskTitle: task.title,
-        status: task.status,
-      },
-      id: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      updatedBy: task.createdBy
-    });
+  createTask: async (taskData: Omit<Task, 'id'>): Promise<string> => {
+    try {
+      const tasksRef = collection(db, TASKS_COLLECTION);
+      const finalData = {
+        ...taskData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        dueDate: convertToTimestamp(taskData.dueDate),
+      };
+      const docRef = await addDoc(tasksRef, finalData);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating task:', error);
+      throw error;
+    }
   },
 
-  async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
+  updateTask: async (taskId: string, taskData: Partial<Task>): Promise<void> => {
     try {
       const taskRef = doc(db, TASKS_COLLECTION, taskId);
-      const updateData: any = {
-        ...updates,
-        updatedAt: serverTimestamp(),
-        updatedBy: updates.updatedBy || updates.createdBy
+      
+      // Create a clean update object without any undefined values
+      const updateData: Record<string, any> = {
+        updatedAt: Timestamp.now()
       };
 
-      // Convert any date fields to Timestamps
-      if (updates.dueDate !== undefined) {
-        updateData.dueDate = convertToTimestamp(updates.dueDate);
-      }
-      if (updates.completedAt !== undefined) {
-        updateData.completedAt = convertToTimestamp(updates.completedAt);
-      }
-      if (updates.deletedAt !== undefined) {
-        updateData.deletedAt = convertToTimestamp(updates.deletedAt);
-      }
-
-      // If completed is explicitly set, update the status accordingly
-      if (updates.status !== undefined) {
-        updateData.status = updates.status === 'הושלם' ? 'הושלם' : 'לביצוע';
-        updateData.completedAt = updates.status === 'הושלם' ? convertToTimestamp(new Date()) : null;
-        updateData.completed = updates.status === 'הושלם';
-      }
-
-      // Handle array fields properly
-      if (updates.comments !== undefined) {
-        updateData.comments = updates.comments;
-      }
-      if (updates.subTasks !== undefined) {
-        updateData.subTasks = updates.subTasks;
-      }
-      if (updates.customers !== undefined) {
-        updateData.customers = updates.customers;
-      }
-
-      // Handle project data
-      if (updates.project !== undefined) {
-        updateData.project = updates.project;
-        updateData.projectId = updates.project?.id || null;
-      }
+      // Process each field, removing undefined values and converting dates
+      Object.entries(taskData).forEach(([key, value]) => {
+        if (value === undefined) {
+          return; // Skip undefined values entirely
+        }
+        
+        if (key === 'dueDate' || key === 'date' || key === 'startDate' || key === 'endDate') {
+          updateData[key] = value ? convertToTimestamp(value as Date | string | Timestamp) : null;
+        } else {
+          updateData[key] = value;
+        }
+      });
 
       await updateDoc(taskRef, updateData);
     } catch (error) {
@@ -154,143 +91,86 @@ export const taskService = {
     }
   },
 
-  async getTask(userId: string, id: string): Promise<Task | null> {
-    const taskRef = doc(db, TASKS_COLLECTION, id);
-    const taskDoc = await getDoc(taskRef);
-    
-    if (!taskDoc.exists()) return null;
-    
-    const data = taskDoc.data();
-    return {
-      id: taskDoc.id,
-      title: data.title || '',
-      description: data.description || '',
-      status: data.status || 'בתהליך',
-      createdAt: data.createdAt?.toDate(),
-      updatedAt: data.updatedAt?.toDate(),
-      dueDate: data.dueDate?.toDate() || null,
-      completedAt: data.completedAt?.toDate() || null,
-      assignedTo: data.assignedTo || [],
-      project: data.project || null,
-      customers: data.customers || [],
-      subTasks: data.subTasks || [],
-      urgency: data.urgency || 'נמוך',
-      repeat: data.repeat || null,
-      previousStatus: data.previousStatus || null,
-    } as unknown as Task;
+  deleteTask: async (taskId: string): Promise<void> => {
+    try {
+      const taskRef = doc(db, TASKS_COLLECTION, taskId);
+      await deleteDoc(taskRef);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      throw error;
+    }
   },
 
-  async getTasksByAssignee(userId: string, assigneeId: string, maxResults?: number): Promise<Task[]> {
-    const q = query(
-      collection(db, TASKS_COLLECTION),
-      where('assignedTo', '==', assigneeId),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(maxResults || 100)
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: data.title || '',
-        description: data.description || '',
-        status: data.status || '',
-        priority: data.priority || '',
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-        dueDate: data.dueDate?.toDate() || null,
-        completedAt: data.completedAt?.toDate() || null,
-        assignedTo: Array.isArray(data.assignedTo) ? data.assignedTo : [data.assignedTo].filter(Boolean),
-        project: data.project || null,
-        customers: data.customers || [],
-        subTasks: data.subTasks || [],
-        previousStatus: data.previousStatus || null,
-        urgency: data.urgency || 'low',
-        category: data.category || '',
-        comments: data.comments || []
-      } as unknown as Task;
-    });
+  getTasks: async (): Promise<Task[]> => {
+    try {
+      const tasksRef = collection(db, TASKS_COLLECTION);
+      const q = query(tasksRef, where('isDeleted', '==', false));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => convertTaskFromFirestore(doc)) as Task[];
+    } catch (error) {
+      console.error('Error getting tasks:', error);
+      throw error;
+    }
   },
 
-  async getTasksByStatus(userId: string, status: Task['status'], maxResults?: number): Promise<Task[]> {
-    const q = query(
-      collection(db, TASKS_COLLECTION),
-      where('status', '==', status),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(maxResults || 100)
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-        dueDate: data.dueDate?.toDate() || null,
-        completedAt: data.completedAt?.toDate() || null,
-        assignedTo: Array.isArray(data.assignedTo) ? data.assignedTo : [data.assignedTo].filter(Boolean),
-        project: data.project || null,
-        customers: data.customers || [],
-        subTasks: data.subTasks || [],
-        previousStatus: data.previousStatus || null,
-        urgency: data.urgency || 'low',
-        repeat: data.repeat || ''
-      } as unknown as Task;
-    });
+  getTask: async (taskId: string): Promise<Task | null> => {
+    try {
+      const taskRef = doc(db, TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) return null;
+      return convertTaskFromFirestore(taskDoc);
+    } catch (error) {
+      console.error('Error getting task:', error);
+      throw error;
+    }
   },
 
-  async getAllTasks(userId: string): Promise<Task[]> {
-    const q = query(
-      collection(db, TASKS_COLLECTION),
-      where('isDeleted', '==', false),
-      orderBy('createdAt', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate(),
-        dueDate: data.dueDate?.toDate() || null,
-        completedAt: data.completedAt?.toDate() || null,
-        assignedTo: Array.isArray(data.assignedTo) ? data.assignedTo : [data.assignedTo].filter(Boolean),
-        project: data.project || null,
-        customers: data.customers || [],
-        subTasks: data.subTasks || [],
-        previousStatus: data.previousStatus || null,
-        urgency: data.urgency || 'low',
-        repeat: data.repeat || ''
-      } as unknown as Task;
-    });
+  getTasksByAssignee: async (assigneeId: string, maxResults?: number): Promise<Task[]> => {
+    try {
+      const tasksRef = collection(db, TASKS_COLLECTION);
+      const q = query(
+        tasksRef,
+        where('assignedTo', '==', assigneeId),
+        where('isDeleted', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(maxResults || 100)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => convertTaskFromFirestore(doc)) as Task[];
+    } catch (error) {
+      console.error('Error getting tasks by assignee:', error);
+      throw error;
+    }
   },
 
-  async deleteTask(id: string, deletedBy: string): Promise<void> {
-    const taskRef = doc(db, TASKS_COLLECTION, id);
-    await updateDoc(taskRef, {
-      isDeleted: true,
-      deletedAt: serverTimestamp(),
-      deletedBy,
-    });
-
-    await activityService.logActivity({
-      type: 'delete',
-      entityType: 'task',
-      entityId: id,
-      description: 'מחיקת משימה',
-      createdBy: deletedBy,
-      id: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
- 
-      updatedBy: ''
-    });
+  getTasksByStatus: async (status: Task['status'], maxResults?: number): Promise<Task[]> => {
+    try {
+      const tasksRef = collection(db, TASKS_COLLECTION);
+      const q = query(
+        tasksRef,
+        where('status', '==', status),
+        where('isDeleted', '==', false),
+        orderBy('createdAt', 'desc'),
+        limit(maxResults || 100)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => convertTaskFromFirestore(doc)) as Task[];
+    } catch (error) {
+      console.error('Error getting tasks by status:', error);
+      throw error;
+    }
   },
+
+  getAllTasks: async (userId?: string): Promise<Task[]> => {
+    try {
+      const tasksRef = collection(db, TASKS_COLLECTION);
+      const q = query(tasksRef, where('isDeleted', '==', false), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => convertTaskFromFirestore(doc)) as Task[];
+    } catch (error) {
+      console.error('Error getting all tasks:', error);
+      throw error;
+    }
+  },
+  convertToTimestamp
 };

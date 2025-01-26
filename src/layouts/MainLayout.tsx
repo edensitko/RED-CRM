@@ -22,9 +22,8 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import SearchIcon from '@mui/icons-material/Search';
 import MenuIcon from '@mui/icons-material/Menu';
 
-import NavigationSidebar from '../components/NavigationSidebar';
-import Sidebar from '../components/Sidebar';
-import FloatingChatButton from '../components/FloatingChatButton';
+import NavigationSidebar from '../components/widgets/NavigationSidebar';
+import FloatingChatButton from '../components/widgets/FloatingChatButton';
 import { useAuth } from '../hooks/useAuth';
 import LogoImage from '../assets/logo.jpg';
 import { CacheProvider } from '@emotion/react';
@@ -34,14 +33,14 @@ const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#ef4444', // red color
+      main: '#ef4444', 
     },
     secondary: {
-      main: '#64748b', // slate-500
+      main: '#64748a', 
     },
     background: {
       default: '#0A0A0A', // darker than black
-      paper: '#141414', // slightly lighter black for cards
+      paper: '#1e1e1e', // slightly lighter black for cards
     },
     text: {
       primary: '#ffffff',

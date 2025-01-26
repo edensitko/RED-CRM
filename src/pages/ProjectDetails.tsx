@@ -7,7 +7,7 @@ import {
   FaPlus, FaCalendarAlt, FaMoneyBillWave
 } from 'react-icons/fa';
 import { SubTask } from '../types/schemas';
-import { CustomerClass } from '../types/customer';
+import { CustomerClass } from '../types/schemas';
 import { Task } from '../types/schemas';
 import { PROJECT_STATUS_CONFIG } from '../config/projectConfig';
 import { taskService } from '../services/firebase/taskService';
@@ -247,11 +247,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                             </div>
                             <div>
                               <label className="text-sm text-gray-400">תאריך התחלה</label>
-                              <p className="text-white">{project?.startDate || 'לא הוגדר'}</p>
+                              <p className="text-white">{project?.startDate ? (project.startDate.toDate?.() || new Date(project.startDate as any)).toLocaleDateString() : 'לא הוגדר'}</p>
                             </div>
                             <div>
                               <label className="text-sm text-gray-400">תאריך סיום</label>
-                              <p className="text-white">{project?.endDate || 'לא הוגדר'}</p>
+                              <p className="text-white">{project?.endDate ? (project.endDate.toDate?.() || new Date(project.endDate as any)).toLocaleDateString() : 'לא הוגדר'}</p>
                             </div>
                           </div>
                         </div>
@@ -388,8 +388,13 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({
           users={users}
           projects={[]}
           customers={customers}
-          onTaskUpdate={handleTaskUpdate}
-        />
+          onTaskUpdate={handleTaskUpdate} onCreateTask={function (task: Task): Promise<void> {
+            throw new Error('Function not implemented.');
+          } } onUpdateTask={function (taskId: string, updates: Partial<Task>): Promise<void> {
+            throw new Error('Function not implemented.');
+          } } onDeleteTask={function (taskId: string): Promise<void> {
+            throw new Error('Function not implemented.');
+          } } subTasks={[]} comments={[]}        />
       )}
     </div>
   );

@@ -155,6 +155,11 @@ const updateProject = async (projectId: string, updates: Partial<ProjectClass>):
 };
 
 const subscribeToProjects = (userId: string, callback: (projects: ProjectClass[]) => void) => {
+  if (!userId) {
+    console.error('No userId provided to subscribeToProjects');
+    return () => {};
+  }
+
   const projectsRef = collection(db, PROJECTS_COLLECTION);
   const q = query(projectsRef, where('userId', '==', userId));
   
@@ -164,6 +169,9 @@ const subscribeToProjects = (userId: string, callback: (projects: ProjectClass[]
       return ProjectClass.fromFirestore({ id: doc.id, ...data });
     });
     callback(projects);
+  }, (error) => {
+    console.error('Firebase subscription error:', error);
+    callback([]);
   });
 };
 

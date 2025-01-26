@@ -4,16 +4,23 @@ import { toast } from 'react-toastify';
 import { Dialog, Transition, Listbox } from '@headlessui/react';
 import { doc, updateDoc, Timestamp, collection, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { FaCheck, FaChevronDown, FaTimes, FaPlus, FaTasks, FaUser, FaCalendarAlt, FaTag, FaProjectDiagram, FaUsers, FaClipboardList, FaComments, FaTrash } from 'react-icons/fa';
-import { Task, SubTask, User, Project } from '../../types/schemas';
-import { CustomerClass } from '../../types/customer';
+import { FaCheck, FaChevronDown, FaTimes, FaPlus, FaTasks, FaUser, FaCalendarAlt, FaTag, FaProjectDiagram, FaUsers, FaClipboardList, FaComments, FaTrash, FaArrowDown, FaEquals, FaArrowUp } from 'react-icons/fa';
+import { Task, SubTask, Project } from '../../types/schemas';
+import { CustomerClass } from '../../types/schemas';
 import { useAuth } from '../../contexts/AuthContext';
+
+interface TaskUser {
+  id: string;
+  email: string;
+  name?: string;
+  displayName?: string;
+}
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   task: Task | null;
-  users: User[];
+  users: TaskUser[];
   projects: Project[];
   customers: CustomerClass[];
   onTaskUpdate: (taskId: string, updates: Partial<Task>) => Promise<void>;
@@ -31,9 +38,9 @@ const statusOptions = [
 ];
 
 const urgencyOptions = [
-  { value: 'נמוכה', label: 'נמוכה', color: 'bg-green-500/20 text-green-500' },
-  { value: 'בינונית', label: 'בינונית', color: 'bg-yellow-500/20 text-yellow-500' },
-  { value: 'גבוהה', label: 'גבוהה', color: 'bg-red-500/20 text-red-500' }
+  { value: 'נמוכה', label: 'נמוכה', icon: <FaArrowDown className="w-4 h-4 text-gray-400" /> },
+  { value: 'בינונית', label: 'בינונית', icon: <FaEquals className="w-4 h-4 text-yellow-400" /> },
+  { value: 'גבוהה', label: 'גבוהה', icon: <FaArrowUp className="w-4 h-4 text-red-400" /> }
 ];
 
 const tabs: { id: 'details' | 'assignee' | 'project' | 'customer' | 'subtasks' | 'comments'; label: string; icon: JSX.Element }[] = [
@@ -59,7 +66,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const currentUserId = currentUser?.uid;
-  const currentUserData = users.find(u => u.id === currentUserId);
+  const currentUserData = users?.find(u => u.id === currentUserId) || {
+    id: currentUserId || '',
+    email: currentUser?.email || '',
+    name: currentUser?.displayName || currentUser?.email || '',
+    displayName: currentUser?.displayName || currentUser?.email || ''
+  };
+  const [isLoading, setIsLoading] = useState(false);
 
   const getInputDateValue = (date: Timestamp | null | undefined): string => {
     if (!date) return '';
@@ -74,26 +87,23 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const [taskState, setTaskState] = useState<Task>({
-    id: task?.id || crypto.randomUUID(),
+    id: task?.id || '',
     title: task?.title || '',
     description: task?.description || '',
     status: task?.status || 'לביצוע',
-    urgent: task?.urgent || 'בינונית',
+    urgent: task?.urgent || 'נמוכה',
+    assignedTo: task?.assignedTo || [currentUser?.uid || ''],
     dueDate: task?.dueDate || null,
-    assignedTo: task?.assignedTo || [],
-    project: task?.project || null,
     customers: task?.customers || [],
+    project: task?.project || null,
     subTasks: task?.subTasks || [],
-    comments: task?.comments || [],
+    completedAt: task?.completedAt || null,
+    isDeleted: task?.isDeleted || false,
     tasks: task?.tasks || [],
     files: task?.files || [],
     links: task?.links || [],
     isFavorite: task?.isFavorite || false,
-    completed: task?.completed || false,
-    createdAt: task?.createdAt || Timestamp.now(),
-    createdBy: task?.createdBy || currentUserId || '',
-    updatedAt: task?.updatedAt || Timestamp.now(),
-    updatedBy: task?.updatedBy || currentUserId || ''
+    comments: task?.comments || []
   });
 
   const [newSubTask, setNewSubTask] = useState<Partial<SubTask>>({
@@ -192,8 +202,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
     try {
       const taskData = {
         ...taskState,
-        createdAt: taskState.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: taskState.createdAt || Timestamp.fromDate(new Date()),
+        updatedAt: Timestamp.now(),
         urgent: mapUrgencyToInternal(taskState.urgent || 'נמוכה'),
         comments: taskState.comments || [],
         subTasks: taskState.subTasks || []
@@ -256,7 +266,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
       createdBy: currentUserId,
       user: {
         id: currentUserId,
-        name: currentUserData.name
+        name: currentUserData?.name || 'Unknown User'  // Provide a fallback value
       }
     };
 
@@ -372,6 +382,62 @@ const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 <div>
+                  <label className="block text-gray-400 mb-1 text-right">דחיפות</label>
+                  <Listbox value={taskState.urgent} onChange={(value) => handleInputChange('urgent', value)}>
+                    <div className="relative">
+                      <Listbox.Button className="relative w-full bg-[#333333] text-white pr-3 pl-10 py-3 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-[#ec5252] min-h-[45px]">
+                        {({ value }) => {
+                          const selectedOption = urgencyOptions.find(opt => opt.value === value);
+                          return (
+                            <>
+                              <span className="flex items-center gap-2">
+                                {selectedOption?.icon}
+                                <span>{selectedOption?.label || value}</span>
+                              </span>
+                              <span className="absolute inset-y-0 left-0 flex items-center pl-2">
+                                <FaChevronDown className="h-4 w-4 text-gray-400" />
+                              </span>
+                            </>
+                          );
+                        }}
+                      </Listbox.Button>
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-100"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Listbox.Options className="absolute z-10 mt-1 w-full bg-[#333333] rounded-xl shadow-lg max-h-60 overflow-auto focus:outline-none py-1">
+                          {urgencyOptions.map((urgency, index) => (
+                            <Listbox.Option
+                              key={`urgency-option-${index}`}
+                              value={urgency.value}
+                              className={({ active }) =>
+                                `${active ? 'bg-[#444444]' : ''} cursor-pointer select-none relative py-2 px-3 hover:bg-[#444444] transition-colors duration-150`
+                              }
+                            >
+                              {({ selected }) => (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`flex items-center gap-2 ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {urgency.icon}
+                                    {urgency.label}
+                                  </span>
+                                  {selected && (
+                                    <span className="text-[#ec5252]">
+                                      <FaCheck className="h-4 w-4" />
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </Listbox.Option>
+                          ))}
+                        </Listbox.Options>
+                      </Transition>
+                    </div>
+                  </Listbox>
+                </div>
+
+                <div>
                   <label className="block text-gray-400 mb-1 text-right">תאריך יעד</label>
                   <div className="relative">
                     <FaCalendarAlt className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -385,6 +451,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                     />
                   </div>
                 </div>
+   
 
                 <div>
                   <label className="block text-gray-400 mb-1 text-right">תיאור</label>
@@ -784,6 +851,39 @@ const TaskModal: React.FC<TaskModalProps> = ({
     onClose();
   };
 
+  const handleCreateTask = async () => {
+    try {
+      setIsLoading(true);
+      const tasksRef = collection(db, 'tasks');
+      const newTask = {
+        title: taskState.title,
+        description: taskState.description,
+        status: taskState.status,
+        urgent: taskState.urgent,
+        dueDate: taskState.dueDate instanceof Timestamp ? taskState.dueDate : (taskState.dueDate ? Timestamp.fromDate(new Date(taskState.dueDate)) : null),
+        assignedTo: taskState.assignedTo,
+        project: taskState.project,
+        customers: taskState.customers,
+        createdAt: Timestamp.now(),
+        createdBy: currentUser?.uid,
+        updatedAt: Timestamp.now(),
+        updatedBy: currentUser?.uid,
+        tasks: [],
+        files: [],
+        links: [],
+        isFavorite: false,
+        comments: []
+      };
+
+      await addDoc(tasksRef, newTask);
+      onClose();
+    } catch (error) {
+      console.error('Error creating task:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog
@@ -873,7 +973,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
               <div className="flex justify-end  m-4 pt-1 border-t border-gray-800">
                 <button
                   type="button"
-                  onClick={handleSubmit}
+                  onClick={task ? handleSubmit : handleCreateTask}
                   className="bg-[#ec5252] text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors duration-200"
                 >
                   {task ? 'עדכן משימה' : 'צור משימה'}

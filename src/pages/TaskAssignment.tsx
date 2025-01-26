@@ -6,14 +6,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import CreateTaskModal from '../components/modals/CreateTaskModal';
-import { CustomerClass } from '../types/customer';
-import { Task, TaskCustomer, Project, SubTask } from '../types/schemas';
+import { Task, TaskCustomer, Project, SubTask ,CustomerClass} from '../types/schemas';
 import TaskModal from '../components/modals/TaskModal';
 import { User } from '../types/schemas';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import CreateTask from '../components/CreateTask';
-import TableAssignments from '../components/TableAssignments';
+import CreateTask from '../components/modals/CreateTask';
+import TableAssignments from '../components/widgets/TableAssignments';
 
 const statusOptions = [
   { value: 'לביצוע', icon: <FaHourglassHalf className="h-5 w-5 text-blue-500" />, bgColor: 'bg-blue-100', textColor: 'text-blue-800' },
@@ -346,9 +345,6 @@ const TaskAssignment: React.FC = () => {
     repeat: 'none',
     customers: [],
     createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-    createdBy: currentUser?.uid || '', // Add this line
-    updatedBy: currentUser?.uid || '', // Add this line
     urgent: 'גבוהה',
     isFavorite: false,
     tasks: [],
@@ -433,7 +429,7 @@ const TaskAssignment: React.FC = () => {
             email: customer.email || '',
             phone: customer.phone || ''
           })) : [],
-          urgency: data.urgency || 'נמוכה',
+          urgent: data.urgent || 'נמוכה',
           repeat: data.repeat || 'לא',
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt : null,
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : null,
@@ -746,10 +742,6 @@ const TaskAssignment: React.FC = () => {
         customers: [],
         urgent: 'גבוהה',
         completed: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: currentUser?.uid || '',
-        updatedBy: currentUser?.uid || '',
         isDeleted: false,
         isFavorite: false,
         tasks: [],
@@ -1137,9 +1129,6 @@ const TaskAssignment: React.FC = () => {
             status: 'לביצוע',
             assignedTo: [],
             createdAt: Timestamp.now(),
-            createdBy: currentUser?.uid || '',
-            updatedAt: Timestamp.now(),
-            updatedBy: currentUser?.uid || '',
             isDeleted: false,
             urgent: 'נמוכה',
             subTasks: [],

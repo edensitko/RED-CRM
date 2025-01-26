@@ -20,35 +20,24 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { getDashboardLayout, saveDashboardLayout } from '../services/firebase/dashboardService';
-import WidgetSelector from '../components/widgets/WidgetSelector';
-import { getWidgetDefinition } from '../components/widgets/widgetDefinitions';
+// import { getDashboardLayout, saveDashboardLayout } from '../services/firebase/dashboardService';
 import useDashboardWidgetData from '../hooks/useDashboardWidgetData';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import ActivitiesWidget from '../components/widgets/ActivitiesWidget';
-import CustomersWidget from '../components/widgets/CustomersWidget';
-import LeadsWidget from '../components/widgets/LeadsWidget';
-import SalesOverviewWidget from '../components/widgets/SalesOverviewWidget';
-import TasksWidget from '../components/widgets/TasksWidget';
-import TeamPerformanceWidget from '../components/widgets/TeamPerformanceWidget';
-import RevenueDistributionWidget from '../components/widgets/RevenueDistributionWidget';
-import QuickActionsWidget from '../components/widgets/QuickActionsWidget';
-import ReportsWidget from '../components/widgets/ReportsWidget';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const widgetComponents: Record<string, React.ComponentType<any>> = {
-  quickActions: QuickActionsWidget,
-  activities: ActivitiesWidget,
-  reports: ReportsWidget,
-  teamPerformance: TeamPerformanceWidget,
-  customers: CustomersWidget,
-  sales: SalesOverviewWidget,
-  tasks: TasksWidget,
-  leads: LeadsWidget,
-  revenueDistribution: RevenueDistributionWidget,
+  // quickActions: QuickActionsWidget,
+  // activities: ActivitiesWidget,
+  // reports: ReportsWidget,
+  // teamPerformance: TeamPerformanceWidget,
+  // customers: CustomersWidget,
+  // sales: SalesOverviewWidget,
+  // tasks: TasksWidget,
+  // leads: LeadsWidget,
+  // revenueDistribution: RevenueDistributionWidget,
 };
 
 interface LayoutItem {
@@ -74,28 +63,28 @@ const Dashboard: React.FC = () => {
   const [widgetSelectorAnchor, setWidgetSelectorAnchor] = useState<HTMLElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    const loadLayout = async () => {
-      if (currentUser) {
-        try {
-          const savedLayout = await getDashboardLayout(currentUser.uid);
-          if (savedLayout && savedLayout.length > 0) {
-            setCurrentLayout(savedLayout.map(item => ({ ...item, settings: item.settings || {} })));
-            setLayouts({
-              lg: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
-              md: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
-              sm: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
-              xs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
-              xxs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
-            });
-          }
-        } catch (error) {
-          console.error('Error loading layout:', error);
-        }
-      }
-    };
-    loadLayout();
-  }, [currentUser]);
+  // useEffect(() => {
+  //   const loadLayout = async () => {
+  //     if (currentUser) {
+  //       try {
+  //         const savedLayout = await getDashboardLayout(currentUser.uid);
+  //         if (savedLayout && savedLayout.length > 0) {
+  //           setCurrentLayout(savedLayout.map(item => ({ ...item, settings: item.settings || {} })));
+  //           setLayouts({
+  //             lg: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+  //             md: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+  //             sm: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+  //             xs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+  //             xxs: savedLayout.map(item => ({ ...item, settings: item.settings || {} })),
+  //           });
+  //         }
+  //       } catch (error) {
+  //         console.error('Error loading layout:', error);
+  //       }
+  //     }
+  //   };
+  //   loadLayout();
+  // }, [currentUser]);
 
   const handleOpenWidgetSelector = (event: React.MouseEvent<HTMLElement>) => {
     setWidgetSelectorAnchor(event.currentTarget);
@@ -106,7 +95,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAddWidget = useCallback((widgetType: string) => {
-    const widgetDef = getWidgetDefinition(widgetType);
+    const widgetDef = widgetComponents[widgetType];
     if (!widgetDef) {
       return;
     }
@@ -136,7 +125,7 @@ const Dashboard: React.FC = () => {
       xs: newLayout.map(item => ({ ...item })),
       xxs: newLayout.map(item => ({ ...item })),
     }));
-    saveDashboardLayout(currentUser?.uid || '', newLayout);
+    // saveDashboardLayout(currentUser?.uid || '', newLayout);
   }, [currentLayout, currentUser]);
 
   const handleRemoveWidget = useCallback(async (widgetId: string) => {
@@ -151,7 +140,7 @@ const Dashboard: React.FC = () => {
         xs: newLayout.map(item => ({ ...item })),
         xxs: newLayout.map(item => ({ ...item })),
       }));
-      await saveDashboardLayout(currentUser?.uid || '', newLayout);
+      // await saveDashboardLayout(currentUser?.uid || '', newLayout);
     } catch (error) {
       console.error('Error removing widget:', error);
     }
@@ -175,9 +164,10 @@ const Dashboard: React.FC = () => {
         xxs: updatedLayout.map(item => ({ ...item })),
       }));
 
-      saveDashboardLayout(currentUser?.uid || '', updatedLayout).catch(error => {
-        console.error('Error saving layout:', error);
-      });
+      // saveDashboardLayout(currentUser?.uid || '', updatedLayout).catch(
+      //   error => {
+      //   console.error('Error saving layout:', error);
+      // });
     }
   }, [isLayoutLocked, currentLayout, currentUser]);
 
@@ -367,14 +357,14 @@ const Dashboard: React.FC = () => {
         )}
       </Box>
 
-      <WidgetSelector
+      {/* <WidgetSelector
         anchorEl={widgetSelectorAnchor}
         onClose={handleCloseWidgetSelector}
         onSelect={(widgetType) => {
           handleAddWidget(widgetType);
           handleCloseWidgetSelector();
         }}
-      />
+      /> */}
     </Box>
   );
 };

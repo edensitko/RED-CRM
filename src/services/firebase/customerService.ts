@@ -14,7 +14,7 @@ import {
   DocumentData
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { CustomerClass } from '../../types/customer';
+import { CustomerClass } from '../../types/schemas';
 
 const COLLECTION = 'Customers';
 
@@ -39,7 +39,8 @@ function convertCustomerFromFirestore(doc: DocumentData): CustomerClass {
     Status: data.Status || 'פעיל',
     Tags: data.Tags || [],
     Tasks: data.Tasks || [],
-    Files: data.Files || []
+    Files: data.Files || [],
+    subTasks: data.subTasks || []
   };
 }
 
